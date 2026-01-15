@@ -5,11 +5,10 @@
 #include <opencv2/opencv.hpp>
 
 class V4L2Capture;
-class GLDisplay;
 
 class EndoViewer {
 public:
-    EndoViewer(bool simulate = false);
+    EndoViewer();
     ~EndoViewer();
 
     void startup(uint8_t left_cam_id = 0, uint8_t right_cam_id = 1, bool is_write_to_video = false);
@@ -20,8 +19,6 @@ private:
     void readLeftImage(int index);
     void readRightImage(int index);
     void show(); // OpenCV can only show window in the same thread
-    void showOpenCV();
-    void showOpenGL();
     void writeVideo();
 
     std::thread _thread_read_l;
@@ -32,10 +29,6 @@ private:
 
     cv::Mat _image_l;
     cv::Mat _image_r;
-
-    bool _is_simulated;
-    GLDisplay* _glDisplay;
-    unsigned int _textureID;
 
     bool _is_write_to_video;
     cv::VideoWriter  _writer;

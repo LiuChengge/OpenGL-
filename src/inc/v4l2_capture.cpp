@@ -226,7 +226,6 @@ bool V4L2Capture::ioctlEnumFmt()
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
     bool support_mjpg = false;
-    bool support_yuyv = false;
     // display all the supported format
     std::cout << "Support Format: \n";
     while(ioctl(cameraFd, VIDIOC_ENUM_FMT, &fmtdesc) != -1)
@@ -235,10 +234,8 @@ bool V4L2Capture::ioctlEnumFmt()
         fmtdesc.index++;
 
         support_mjpg = support_mjpg || (fmtdesc.pixelformat == MJPG_FORMAT_VALUE);
-        support_yuyv = support_yuyv || (fmtdesc.pixelformat == YUYV_FORMAT_VALUE);
-    bool support_yuyv = (fmtdesc.pixelformat == YUYV_FORMAT_VALUE);
     }
-    return support_mjpg || support_yuyv;
+    return support_mjpg;
 }
 
 void V4L2Capture::ioctlSetStreamParm()
@@ -273,21 +270,21 @@ void V4L2Capture::ioctlSetStreamFmt()
     if(format.fmt.pix.pixelformat != V4L2_PIX_FMT_JPEG)
         std::cout << "Not using MJPEG as data format\n";
 
-    // set/change the format to YUYV (since camera outputs YUYV, not MJPG)
+    // set/change the format
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     format.fmt.pix.width = frame_width;        // a value should be divide by 16
     format.fmt.pix.height = frame_height;      // a value should be divide by 16
-    format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;  // Use YUYV instead of MJPG
-    format.fmt.pix.field = V4L2_FIELD_ANY;
+    format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+    format.fmt.pix.field = V4L2_FIELD_ANY; // not sure whether need to set
 
     if(xioctl(cameraFd, VIDIOC_S_FMT, &format) == -1)
         errno_exit("VIDIOC_S_FMT");
     if(format.fmt.pix.width != frame_width)
-        std::cout << "Device reset width to " << format.fmt.pix.width << std::endl;
+        std::cout << "Device reset width to " << frame_width << std::endl;
     if(format.fmt.pix.height != frame_height)
-        std::cout << "Device reset height to " << format.fmt.pix.height << std::endl;
-    if(format.fmt.pix.pixelformat != V4L2_PIX_FMT_YUYV)
-        std::cout << "Warning: Could not set YUYV format, using: " << format.fmt.pix.pixelformat << std::endl;
+        std::cout << "Device reset height to " << frame_height << std::endl;
+    if(format.fmt.pix.pixelformat != V4L2_PIX_FMT_MJPEG)
+        errno_exit("VIDIOC_S_FMT: Unable to set V4L2_PIX_FMT_MJPEG");
 }
 
 void V4L2Capture::ioctlSetSharpnessParm()
@@ -458,65 +455,23 @@ void V4L2Capture::unMmapBuffers()
 
 bool V4L2Capture::processImage(const void *p, uint size, unsigned char* data)
 {
-    // Check if this is YUYV format (4 bytes per 2 pixels)
-    // YUYV format: Y0 U0 Y1 V0, where each YUYV unit represents 2 pixels
-    if (size == (uint)(frame_width * frame_height * 2)) {
-        // Convert YUYV to RGB
-        const unsigned char* yuyv = static_cast<const unsigned char*>(p);
-        unsigned char* rgb = data;
+    unsigned int jpg_size = 0;
 
-        for (int i = 0; i < frame_height; i++) {
-            for (int j = 0; j < frame_width; j += 2) {
-                // YUYV format: Y0 U0 Y1 V0 for 2 pixels
-                int yuyv_index = (i * frame_width + j) * 2;
-                int y0 = yuyv[yuyv_index];
-                int u = yuyv[yuyv_index + 1];
-                int y1 = yuyv[yuyv_index + 2];
-                int v = yuyv[yuyv_index + 3];
+    bool bSuccess = mjpeg2jpeg(static_cast<const byte*>(p), size, jpeg_buffer, frame_width*frame_height * 3, &jpg_size);
 
-                // Convert YUV to RGB for first pixel (Y0, U, V)
-                int r0 = y0 + 1.402 * (v - 128);
-                int g0 = y0 - 0.344 * (u - 128) - 0.714 * (v - 128);
-                int b0 = y0 + 1.772 * (u - 128);
-
-                // Convert YUV to RGB for second pixel (Y1, U, V)
-                int r1 = y1 + 1.402 * (v - 128);
-                int g1 = y1 - 0.344 * (u - 128) - 0.714 * (v - 128);
-                int b1 = y1 + 1.772 * (u - 128);
-
-                // Clamp to 0-255 and store RGB values
-                rgb[(i * frame_width + j) * 3] = std::max(0, std::min(255, r0));         // R0
-                rgb[(i * frame_width + j) * 3 + 1] = std::max(0, std::min(255, g0));   // G0
-                rgb[(i * frame_width + j) * 3 + 2] = std::max(0, std::min(255, b0));   // B0
-
-                if (j + 1 < frame_width) {
-                    rgb[(i * frame_width + j + 1) * 3] = std::max(0, std::min(255, r1));       // R1
-                    rgb[(i * frame_width + j + 1) * 3 + 1] = std::max(0, std::min(255, g1)); // G1
-                    rgb[(i * frame_width + j + 1) * 3 + 2] = std::max(0, std::min(255, b1)); // B1
-                }
-            }
-        }
-        return true;
-    } else {
-        // Fallback to MJPG processing for compatibility
-        unsigned int jpg_size = 0;
-
-        bool bSuccess = mjpeg2jpeg(static_cast<const byte*>(p), size, jpeg_buffer, frame_width*frame_height * 3, &jpg_size);
-
-        if(!bSuccess)
-        {
-            std::cout << "mjpeg2jpeg failed!\n";
-            return false;
-        }
-        bSuccess = decodeJPEG(jpeg_buffer, jpg_size);
-        if(bSuccess)
-        {
-            memcpy(data, decode_buffer, frame_height*frame_width*3*sizeof(unsigned char));
-        }
-        else std::cout << "Jpeg decompression failed!\n";
-
-        return bSuccess;
+    if(!bSuccess)
+    {
+        std::cout << "mjpeg2jpeg failed!\n";
+        return false;
     }
+    bSuccess = decodeJPEG(jpeg_buffer, jpg_size);
+    if(bSuccess)
+    {
+        memcpy(data, decode_buffer, frame_height*frame_width*3*sizeof(unsigned char));
+    }
+    else std::cout << "Jpeg decompression failed!\n";
+
+    return bSuccess;
 }
 
 
@@ -529,21 +484,12 @@ bool V4L2Capture::decodeJPEG(uchar *pcompressed_image, unsigned long jpeg_size)
 {
     int width, height, jpeg_sub_samp;
     tjhandle jpeg_decompressor = tjInitDecompress();
+    tjDecompressHeader2(jpeg_decompressor, pcompressed_image, jpeg_size, &width, &height, &jpeg_sub_samp);
 
-    if (tjDecompressHeader2(jpeg_decompressor, pcompressed_image, jpeg_size, &width, &height, &jpeg_sub_samp) != 0) {
-        std::cout << "Failed to read JPEG header: " << tjGetErrorStr() << std::endl;
-        tjDestroy(jpeg_decompressor);
-        return false;
-    }
-
-    if (tjDecompress2(jpeg_decompressor, pcompressed_image, jpeg_size, decode_buffer,
-                      width, 0/*pitch*/, height, TJPF_RGB, TJFLAG_FASTDCT | TJFLAG_FASTUPSAMPLE) != 0) {
-        std::cout << "Failed to decompress JPEG: " << tjGetErrorStr() << std::endl;
-        tjDestroy(jpeg_decompressor);
-        return false;
-    }
+    tjDecompress2(jpeg_decompressor, pcompressed_image, jpeg_size, decode_buffer, width, 0/*pitch*/, height, TJPF_RGB, TJFLAG_FASTDCT | TJFLAG_FASTUPSAMPLE);
 
     tjDestroy(jpeg_decompressor);
+
     return true;
 }
 
