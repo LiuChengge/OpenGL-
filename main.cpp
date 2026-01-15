@@ -8,8 +8,9 @@ int main(int argc, char* argv[])
 
     // Enable real camera mode for latency testing (use false for real cameras)
     EndoViewer endo_viewer(false);
-    endo_viewer.startup(0, 1, false);
-
+    endo_viewer.startup(4, 6, false);
+  //  endo_viewer.startup(6, 7, false);
+    
     return 0;
 }
 

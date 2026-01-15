@@ -49,6 +49,7 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     ${OpenCV_LIBS}
     ${OPENGL_LIBRARIES}
+    turbojpeg
     glfw
     dl
     pthread

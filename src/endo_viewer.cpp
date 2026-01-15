@@ -110,6 +110,14 @@ void EndoViewer::readLeftImage(int index) {
 
         flag = _cap_l->ioctlDequeueBuffers(_image_l.data);
         flag = flag && (!_image_l.empty());
+
+        // 在 readLeftImage 的 while 循环里，ioctlDequeueBuffers 之后，if(!flag) 之前：
+
+        // --- 添加诊断代码 ---
+        unsigned char* ptr = _image_l.data;
+        printf("Data Check: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_l.total() * _image_l.elemSize());
+        // ------------------
+
         if(!flag) {
             printf("EndoViewer::readLeftImage: USB ID: %d, image empty: %d.\n",
                     index, _image_l.empty());
