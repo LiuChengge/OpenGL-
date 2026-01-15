@@ -1,0 +1,24 @@
+#!/bin/bash
+echo "启动内窥镜查看器 - 真实摄像头延迟测试模式"
+echo "重要: 此程序需要在有图形界面的环境中运行，且需要连接真实的V4L2摄像头！"
+echo ""
+echo "测试目的: 测量从摄像头到显示器的完整延迟（Glass-to-Glass latency）"
+echo "窗口大小: 1920x1080 (分屏显示)"
+echo ""
+echo "延迟测试方法:"
+echo "  1. 连接示波器到闪烁的LED和显示器"
+echo "  2. 将摄像头对准LED"
+echo "  3. 测量LED闪烁到屏幕显示的延迟"
+echo ""
+echo "您将看到:"
+echo "  - 左侧半屏: 左摄像头实时视频流"
+echo "  - 右侧半屏: 右摄像头实时视频流"
+echo "  - 无性能统计输出（为最小化延迟）"
+echo ""
+echo "按 ESC 或关闭窗口退出程序"
+echo ""
+echo "注意: 确保摄像头已连接且V4L2驱动正常工作"
+echo ""
+
+cd build
+./endo_viewer_v4l

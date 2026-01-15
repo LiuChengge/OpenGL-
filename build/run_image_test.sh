@@ -1,0 +1,13 @@
+#!/bin/bash
+echo "启动内窥镜查看器 - OpenGL静态图像性能测试模式"
+echo "重要: 此程序需要在有图形界面的环境中运行！"
+echo ""
+echo "测试内容:"
+echo "  - 加载 container.jpg 图像"
+echo "  - 显示在左右分屏中（相同图像）"
+echo "  - 测量纹理上传和渲染时间"
+echo ""
+echo "运行命令: ./endo_viewer_v4l"
+echo ""
+echo "注意: 如果在无头环境中运行，程序可能无法显示窗口。"
+echo "建议在有X11/图形界面的Linux环境中运行。"
