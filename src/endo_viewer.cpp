@@ -98,6 +98,7 @@ void EndoViewer::readLeftImage(int index) {
         if(ms < 17) {
             std::this_thread::sleep_for(std::chrono::milliseconds(TIME_INTTERVAL - ms));
         }
+
     }
 }
 
@@ -147,7 +148,7 @@ void EndoViewer::show() {
 
     // Initialize OpenGL display
     GLDisplay* glDisplay = new GLDisplay();
-    if (!glDisplay->init(1920, 1080, "Endoscope Viewer - OpenGL Mode")) {
+    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode")) {
         printf("Failed to initialize GLDisplay\n");
         delete glDisplay;
         return;

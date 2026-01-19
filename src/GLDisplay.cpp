@@ -49,6 +49,7 @@ bool GLDisplay::initGLFW(int width, int height, std::string title) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);  // 使窗口可见（用于性能测试）
 
+    
     // 创建GLFW窗口
     window = glfwCreateWindow(width, height, title.c_str(), NULL, NULL);
     if (!window) {
@@ -59,6 +60,9 @@ bool GLDisplay::initGLFW(int width, int height, std::string title) {
     // 设置当前OpenGL上下文
     glfwMakeContextCurrent(window);
 
+    // 禁用垂直同步（消除卡顿）
+    glfwSwapInterval(0);
+    
     return true;
 }
 
@@ -196,12 +200,12 @@ void GLDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, i
     // 更新左眼纹理数据
     glBindTexture(GL_TEXTURE_2D, leftTexID);
     // 使用glTexSubImage2D高效更新纹理（支持OpenCV的BGR格式）
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, leftData);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, leftData);
 
     // 更新右眼纹理数据
     glBindTexture(GL_TEXTURE_2D, rightTexID);
     // 使用glTexSubImage2D高效更新纹理（支持OpenCV的BGR格式）
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, rightData);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rightData);
 }
 
 void GLDisplay::draw() {
@@ -225,6 +229,9 @@ void GLDisplay::draw() {
 
     // 绘制全屏四边形（6个顶点）
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    //glFlush();
+    glFinish();
 
     // 交换前后缓冲区并处理事件
     glfwSwapBuffers(window);
