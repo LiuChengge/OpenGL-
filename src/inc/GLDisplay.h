@@ -10,6 +10,11 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <string>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 
 class GLDisplay {
 public:
@@ -21,9 +26,10 @@ public:
      * @param width 窗口宽度
      * @param height 窗口高度
      * @param title 窗口标题
+     * @param numWindows 窗口数量（默认为1）
      * @return 初始化是否成功
      */
-    bool init(int width, int height, std::string title);
+    bool init(int width, int height, std::string title, int numWindows = 1);
 
     /**
      * @brief 设置双纹理（左右眼）
@@ -43,9 +49,19 @@ public:
     void updateVideo(unsigned char* leftData, unsigned char* rightData, int width, int height);
 
     /**
-     * @brief 执行渲染操作
+     * @brief 执行渲染操作（单窗口，保持向后兼容）
      */
     void draw();
+
+    /**
+     * @brief 串行渲染所有窗口（单线程顺序渲染）
+     */
+    void drawSerial();
+
+    /**
+     * @brief 并行渲染所有窗口（多线程同时渲染）
+     */
+    void drawParallel();
 
     /**
      * @brief 检查窗口是否应该关闭
@@ -59,16 +75,34 @@ public:
     void cleanup();
 
 private:
-    GLFWwindow* window;           // GLFW窗口句柄
-    unsigned int shaderProgram;   // GLSL着色器程序
-    unsigned int VAO, VBO;        // 顶点数组和缓冲对象
-    unsigned int leftTexID, rightTexID;  // 左右眼纹理ID
+    std::vector<GLFWwindow*> windows;    // GLFW窗口句柄向量
+    std::vector<unsigned int> VAOs;      // 每个窗口的VAO（VAO在OpenGL 3.3 Core Profile中不共享）
+    unsigned int shaderProgram;         // GLSL着色器程序（共享）
+    unsigned int VBO, EBO;              // 顶点缓冲对象和索引缓冲对象（共享）
+    unsigned int leftTexID, rightTexID;  // 左右眼纹理ID（共享）
     int windowWidth, windowHeight;       // 窗口尺寸
+
+    // 着色器uniform位置缓存（避免多线程中重复查询）
+    int texLeftLocation;                 // texLeft uniform位置
+    int texRightLocation;                // texRight uniform位置
+
+    // 线程池相关成员变量
+    std::vector<std::thread> workers;           // 持久线程池
+    std::mutex mtx;                             // 同步互斥锁
+    std::condition_variable cv_start;           // 启动工作条件变量
+    std::condition_variable cv_done;            // 工作完成条件变量
+    std::atomic<int> threads_completed{0};      // 已完成线程计数
+    bool stop_threads = false;                  // 线程停止标志
+    uint64_t frame_gen_id = 0;                  // 帧代计数器（确保每帧只处理一次）
 
     /**
      * @brief 初始化GLFW窗口
+     * @param width 窗口宽度
+     * @param height 窗口高度
+     * @param title 窗口标题
+     * @param numWindows 窗口数量
      */
-    bool initGLFW(int width, int height, std::string title);
+    bool initGLFW(int width, int height, std::string title, int numWindows);
 
     /**
      * @brief 初始化GLAD OpenGL函数加载器
@@ -82,8 +116,26 @@ private:
 
     /**
      * @brief 设置全屏四边形顶点数据
+     * @param windowIndex 窗口索引（用于存储对应的VAO）
      */
-    void setupQuad();
+    void setupQuad(int windowIndex);
+
+    /**
+     * @brief 在指定窗口上下文中执行渲染（用于多线程渲染）
+     * @param windowIndex 窗口索引
+     */
+    void renderWindowContext(int windowIndex);
+
+    /**
+     * @brief 初始化持久线程池
+     */
+    void initWorkers();
+
+    /**
+     * @brief 工作线程循环
+     * @param windowIndex 窗口索引
+     */
+    void workerLoop(int windowIndex);
 
     // ========== GLSL着色器源码 ==========
 

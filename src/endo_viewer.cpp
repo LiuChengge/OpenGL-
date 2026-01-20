@@ -5,6 +5,9 @@
 
 #define DO_EFFECIENCY_TEST 1
 
+// 渲染模式切换：0 = 串行渲染（单线程），1 = 并行渲染（多线程）
+#define RENDER_MODE_PARALLEL 1
+
 namespace {
 
     std::chrono::steady_clock::time_point getCurrentTimePoint() {
@@ -146,9 +149,9 @@ void EndoViewer::show() {
     // Replace original OpenCV display with OpenGL for minimal latency
     printf("Starting OpenGL real camera latency test mode...\n");
 
-    // Initialize OpenGL display
+    // Initialize OpenGL display with 2 windows for latency testing
     GLDisplay* glDisplay = new GLDisplay();
-    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode")) {
+    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
         printf("Failed to initialize GLDisplay\n");
         delete glDisplay;
         return;
@@ -160,7 +163,13 @@ void EndoViewer::show() {
         return;
     }
 
+    // 打印当前使用的渲染模式（VSync开启）
     printf("Real camera latency test: consuming V4L2 camera feeds...\n");
+#if RENDER_MODE_PARALLEL
+    printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
+#else
+    printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
+#endif
 
     // Main display loop - no frame rate limiting for latency testing
     while (!glDisplay->shouldClose()) {
@@ -171,7 +180,13 @@ void EndoViewer::show() {
 
         // Direct OpenGL rendering without data copying for minimum latency
         glDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
-        glDisplay->draw();
+        
+        // 根据宏选择渲染模式
+#if RENDER_MODE_PARALLEL
+        glDisplay->drawParallel();
+#else
+        glDisplay->drawSerial();
+#endif
     }
 
     printf("EndoViewer: exit OpenGL latency test mode.\n");
