@@ -65,6 +65,8 @@ stb_image.h
 /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp
 inc/VkDisplay.h
 /home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
+opencv2/opencv.hpp
+-
 
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp
 endo_viewer.h
@@ -84,6 +86,8 @@ thread
 cstdint
 -
 opencv2/opencv.hpp
+-
+atomic
 -
 
 /home/lcg/code/endo_v4l_cv/src/inc/GLDisplay.h

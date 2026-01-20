@@ -1,4 +1,5 @@
 #include "inc/VkDisplay.h"
+#include <opencv2/opencv.hpp>
 
 // Vulkan验证层
 const std::vector<const char*> validationLayers = {
@@ -517,15 +518,23 @@ VkSurfaceFormatKHR VkDisplay::chooseSwapSurfaceFormat(const std::vector<VkSurfac
 }
 
 VkPresentModeKHR VkDisplay::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
-    // 优先选择Mailbox模式（低延迟）
+    // 优先级1: Mailbox模式（低延迟，无撕裂）
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            std::cout << "Using Mailbox Mode (low latency)" << std::endl;
+            std::cout << "Using Mailbox Mode (low latency, no tearing)" << std::endl;
             return availablePresentMode;
         }
     }
 
-    // Fallback到FIFO模式（标准VSync）
+    // 优先级2: Immediate模式（超低延迟，允许撕裂）
+    for (const auto& availablePresentMode : availablePresentModes) {
+        if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            std::cout << "Using Immediate Mode (lowest latency, tearing allowed)" << std::endl;
+            return availablePresentMode;
+        }
+    }
+
+    // Fallback: FIFO模式（标准VSync）
     std::cout << "Using FIFO Mode (standard VSync)" << std::endl;
     return VK_PRESENT_MODE_FIFO_KHR;
 }
@@ -1097,28 +1106,23 @@ void VkDisplay::createDescriptors() {
 }
 
 void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, int width, int height) {
-    // 将BGR转换为RGBA并复制到暂存缓冲区
-    unsigned char* stagingPtr = static_cast<unsigned char*>(stagingBufferMapped);
+    // 使用OpenCV进行SIMD加速的BGR到RGBA转换（零拷贝）
 
-    // 转换左眼图像
-    for (int i = 0; i < width * height; i++) {
-        stagingPtr[i * 4 + 0] = leftData[i * 3 + 0];  // B
-        stagingPtr[i * 4 + 1] = leftData[i * 3 + 1];  // G
-        stagingPtr[i * 4 + 2] = leftData[i * 3 + 2];  // R
-        stagingPtr[i * 4 + 3] = 255;                  // A
-    }
+    // 左眼图像：包装外部数据为cv::Mat（不分配新内存）
+    cv::Mat leftBGR(height, width, CV_8UC3, leftData);
+    // 右眼图像：包装外部数据为cv::Mat（不分配新内存）
+    cv::Mat rightBGR(height, width, CV_8UC3, rightData);
 
-    // 转换右眼图像
-    for (int i = 0; i < width * height; i++) {
-        stagingPtr[width * height * 4 + i * 4 + 0] = rightData[i * 3 + 0];  // B
-        stagingPtr[width * height * 4 + i * 4 + 1] = rightData[i * 3 + 1];  // G
-        stagingPtr[width * height * 4 + i * 4 + 2] = rightData[i * 3 + 2];  // R
-        stagingPtr[width * height * 4 + i * 4 + 3] = 255;                  // A
-    }
+    // 左眼目标：包装暂存缓冲区为cv::Mat（不分配新内存）
+    cv::Mat leftRGBA(height, width, CV_8UC4, static_cast<unsigned char*>(stagingBufferMapped));
+    // 右眼目标：包装暂存缓冲区第二部分为cv::Mat（不分配新内存）
+    cv::Mat rightRGBA(height, width, CV_8UC4,
+                      static_cast<unsigned char*>(stagingBufferMapped) + width * height * 4);
 
-    // TODO: 记录命令缓冲区进行图像复制
-    // 这里需要实现命令缓冲区的记录和提交
-    // 暂时留空，下一阶段实现
+    // 使用OpenCV SIMD加速转换（零拷贝）
+    cv::cvtColor(leftBGR, leftRGBA, cv::COLOR_BGR2BGRA);
+    cv::cvtColor(rightBGR, rightRGBA, cv::COLOR_BGR2BGRA);
+    // 注意：纹理上传将在recordCommandBuffer中进行，无需额外操作
 }
 
 // 辅助函数：查找合适的内存类型
@@ -1513,6 +1517,9 @@ void VkDisplay::draw() {
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to present swap chain image!");
     }
+
+    // 强制GPU管道刷新，确保超低延迟（类似glFinish）
+    vkDeviceWaitIdle(device);
 
     // 更新当前帧索引
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
