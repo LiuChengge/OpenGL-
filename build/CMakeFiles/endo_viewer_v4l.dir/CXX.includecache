@@ -49,6 +49,8 @@ string
 -
 ./src/endo_viewer.h
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.h
+./src/inc/VkDisplay.h
+/home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
 
 /home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp
 inc/GLDisplay.h
@@ -60,6 +62,10 @@ cstdio
 stb_image.h
 -
 
+/home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp
+inc/VkDisplay.h
+/home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
+
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp
 endo_viewer.h
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.h
@@ -69,6 +75,8 @@ ctime
 /home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.h
 ./inc/GLDisplay.h
 /home/lcg/code/endo_v4l_cv/src/inc/GLDisplay.h
+./inc/VkDisplay.h
+/home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
 
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.h
 thread
@@ -94,6 +102,32 @@ mutex
 condition_variable
 -
 atomic
+-
+
+/home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
+GLFW/glfw3.h
+-
+vulkan/vulkan.h
+-
+vector
+-
+optional
+-
+stdexcept
+-
+iostream
+-
+cstring
+-
+set
+-
+algorithm
+-
+string
+-
+limits
+-
+fstream
 -
 
 /home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp

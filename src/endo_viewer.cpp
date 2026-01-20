@@ -2,6 +2,7 @@
 #include <ctime>
 #include "./inc/v4l2_capture.h"
 #include "./inc/GLDisplay.h"
+#include "./inc/VkDisplay.h"
 
 #define DO_EFFECIENCY_TEST 1
 
@@ -40,6 +41,7 @@ EndoViewer::EndoViewer()
     , _image_l(cv::Mat(imheight, imwidth, CV_8UC3))
     , _image_r(cv::Mat(imheight, imwidth, CV_8UC3))
     , _is_write_to_video(false)
+    , _keep_running(true)
 {
 }
 
@@ -75,17 +77,17 @@ void EndoViewer::readLeftImage(int index) {
     }
 
     bool flag = 0;
-    while(true) {
+    while(_keep_running) {
         auto time_start = ::getCurrentTimePoint();
 
         flag = _cap_l->ioctlDequeueBuffers(_image_l.data);
         flag = flag && (!_image_l.empty());
 
-        // Debug: check data
-        if(flag) {
-            unsigned char* ptr = _image_l.data;
-            printf("Data Check Left: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_l.total() * _image_l.elemSize());
-        }
+        // // Debug: check data
+        // if(flag) {
+        //     unsigned char* ptr = _image_l.data;
+        //     printf("Data Check Left: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_l.total() * _image_l.elemSize());
+        // }
 
         if(!flag) {
             printf("EndoViewer::readLeftImage: USB ID: %d, image empty: %d.\n",
@@ -95,9 +97,9 @@ void EndoViewer::readLeftImage(int index) {
         }
 
         auto ms = getDurationSince(time_start);
-#if DO_EFFECIENCY_TEST
-        printf("EndoViewer::readLeftImage: [%ld]ms elapsed.\n", ms);
-#endif
+// #if DO_EFFECIENCY_TEST
+//         printf("EndoViewer::readLeftImage: [%ld]ms elapsed.\n", ms);
+// #endif
         if(ms < 17) {
             std::this_thread::sleep_for(std::chrono::milliseconds(TIME_INTTERVAL - ms));
         }
@@ -114,17 +116,17 @@ void EndoViewer::readRightImage(int index) {
     }
 
     bool flag = 0;
-    while(true) {
+    while(_keep_running) {
         auto time_start = ::getCurrentTimePoint();
 
         flag = _cap_r->ioctlDequeueBuffers(_image_r.data);
         flag = flag && (!_image_r.empty());
 
-        // Debug: check data
-        if(flag) {
-            unsigned char* ptr = _image_r.data;
-            printf("Data Check Right: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_r.total() * _image_r.elemSize());
-        }
+        // // Debug: check data
+        // if(flag) {
+        //     unsigned char* ptr = _image_r.data;
+        //     printf("Data Check Right: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_r.total() * _image_r.elemSize());
+        // }
 
         if(!flag) {
             printf("EndoViewer::readRightImage: USB ID: %d, image empty: %d.\n",
@@ -134,9 +136,9 @@ void EndoViewer::readRightImage(int index) {
         }
 
         auto ms = getDurationSince(time_start);
-#if DO_EFFECIENCY_TEST
-        printf("EndoViewer::readRightImage: [%ld]ms elapsed.\n", ms);
-#endif
+// #if DO_EFFECIENCY_TEST
+//         printf("EndoViewer::readRightImage: [%ld]ms elapsed.\n", ms);
+// #endif
         if(ms < 17) {
             std::this_thread::sleep_for(std::chrono::milliseconds(TIME_INTTERVAL - ms));
         }
@@ -145,53 +147,100 @@ void EndoViewer::readRightImage(int index) {
 
 
 void EndoViewer::show() {
-    // OpenGL low-latency display mode for camera latency testing
-    // Replace original OpenCV display with OpenGL for minimal latency
-    printf("Starting OpenGL real camera latency test mode...\n");
+    printf("============================================================\n");
+    printf("🚀 Starting Vulkan Low-Latency Mode (Mailbox Strategy)\n");
+    printf("============================================================\n");
 
-    // Initialize OpenGL display with 2 windows for latency testing
-    GLDisplay* glDisplay = new GLDisplay();
-    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
-        printf("Failed to initialize GLDisplay\n");
-        delete glDisplay;
+    // 1. 创建 Vulkan 显示实例
+    VkDisplay* vkDisplay = new VkDisplay();
+    
+    // 2. 初始化 (注意：VkDisplay 内部已经封装了 GLFW 窗口创建)
+    // 参数 2 是 dummy，因为 Vulkan 实现里不依赖这个数量，但为了兼容接口保留
+    if (!vkDisplay->init(1920, 540, "Endoscope Viewer - Vulkan")) {
+        printf("❌ Failed to initialize VkDisplay. Falling back or exiting.\n");
+        delete vkDisplay;
         return;
     }
 
-    if (!glDisplay->setupTexture(imwidth, imheight)) {
-        printf("Failed to setup GLDisplay texture\n");
-        delete glDisplay;
-        return;
-    }
+    printf("✅ Vulkan Initialized. Consuming camera feed...\n");
 
-    // 打印当前使用的渲染模式（VSync开启）
-    printf("Real camera latency test: consuming V4L2 camera feeds...\n");
-#if RENDER_MODE_PARALLEL
-    printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
-#else
-    printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
-#endif
+    // 3. 主循环
+    while (!vkDisplay->shouldClose()) {
+        // 处理窗口事件 (必须在主线程调用)
+        vkDisplay->pollEvents();
 
-    // Main display loop - no frame rate limiting for latency testing
-    while (!glDisplay->shouldClose()) {
-        // Check if camera data is ready
-        if (_image_l.rows == 0 || _image_r.rows == 0) {
-            continue;
+        // 检查是否有新图像 (非阻塞检查)
+        // 注意：如果相机还没给数据，_image_l 可能为空，这里做个保护
+        if (_image_l.empty() || _image_r.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue; 
         }
 
-        // Direct OpenGL rendering without data copying for minimum latency
-        glDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
+        // 4. 数据上传 (CPU -> Staging Buffer)
+        // Vulkan 的 updateVideo 只是内存拷贝 (memcpy)，非常快
+        vkDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
         
-        // 根据宏选择渲染模式
-#if RENDER_MODE_PARALLEL
-        glDisplay->drawParallel();
-#else
-        glDisplay->drawSerial();
-#endif
+        // 5. 渲染提交 (Submit & Present)
+        // 这一步是非阻塞的，除非 GPU 积压了超过 MAX_FRAMES_IN_FLIGHT 帧
+        vkDisplay->draw();
     }
 
-    printf("EndoViewer: exit OpenGL latency test mode.\n");
-    glDisplay->cleanup();
-    delete glDisplay;
+    printf("EndoViewer: exit Vulkan mode.\n");
+
+    _keep_running = false;
+    // 稍微等待一下，让子线程安全退出（可选，防止析构过快）
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    vkDisplay->cleanup();
+    delete vkDisplay;
+
+//     // OpenGL low-latency display mode for camera latency testing
+//     // Replace original OpenCV display with OpenGL for minimal latency
+//     printf("Starting OpenGL real camera latency test mode...\n");
+
+//     // Initialize OpenGL display with 2 windows for latency testing
+//     GLDisplay* glDisplay = new GLDisplay();
+//     if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
+//         printf("Failed to initialize GLDisplay\n");
+//         delete glDisplay;
+//         return;
+//     }
+
+//     if (!glDisplay->setupTexture(imwidth, imheight)) {
+//         printf("Failed to setup GLDisplay texture\n");
+//         delete glDisplay;
+//         return;
+//     }
+
+//     // 打印当前使用的渲染模式（VSync开启）
+//     printf("Real camera latency test: consuming V4L2 camera feeds...\n");
+// #if RENDER_MODE_PARALLEL
+//     printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
+// #else
+//     printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
+// #endif
+
+//     // Main display loop - no frame rate limiting for latency testing
+//     while (!glDisplay->shouldClose()) {
+//         // Check if camera data is ready
+//         if (_image_l.rows == 0 || _image_r.rows == 0) {
+//             continue;
+//         }
+
+//         // Direct OpenGL rendering without data copying for minimum latency
+//         glDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
+        
+//         // 根据宏选择渲染模式
+// #if RENDER_MODE_PARALLEL
+//         glDisplay->drawParallel();
+// #else
+//         glDisplay->drawSerial();
+// #endif
+//     }
+
+//     printf("EndoViewer: exit OpenGL latency test mode.\n");
+//     glDisplay->cleanup();
+//     delete glDisplay;
 }
 
 

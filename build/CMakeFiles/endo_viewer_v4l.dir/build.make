@@ -83,9 +83,22 @@ CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp -o CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.s
 
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: CMakeFiles/endo_viewer_v4l.dir/flags.make
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: ../src/VkDisplay.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o -c /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp
+
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp > CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.i
+
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp -o CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.s
+
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: CMakeFiles/endo_viewer_v4l.dir/flags.make
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/endo_viewer.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o"
 	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o -c /home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp
 
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.i: cmake_force
@@ -98,7 +111,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.s: cmake_force
 
 CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o: CMakeFiles/endo_viewer_v4l.dir/flags.make
 CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o: ../src/inc/mjpeg2jpeg.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o"
 	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o -c /home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp
 
 CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.i: cmake_force
@@ -111,7 +124,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.s: cmake_force
 
 CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o: CMakeFiles/endo_viewer_v4l.dir/flags.make
 CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o: ../src/inc/v4l2_capture.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o"
 	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o -c /home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.cpp
 
 CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.i: cmake_force
@@ -124,7 +137,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.s: cmake_force
 
 CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o: CMakeFiles/endo_viewer_v4l.dir/flags.make
 CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o: ../src/glad.c
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building C object CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building C object CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -o CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o   -c /home/lcg/code/endo_v4l_cv/src/glad.c
 
 CMakeFiles/endo_viewer_v4l.dir/src/glad.c.i: cmake_force
@@ -139,6 +152,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/glad.c.s: cmake_force
 endo_viewer_v4l_OBJECTS = \
 "CMakeFiles/endo_viewer_v4l.dir/main.cpp.o" \
 "CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o" \
+"CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o" \
 "CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o" \
 "CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o" \
 "CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o" \
@@ -149,6 +163,7 @@ endo_viewer_v4l_EXTERNAL_OBJECTS =
 
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/main.cpp.o
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o
+endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o
@@ -186,6 +201,7 @@ endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_xphoto.so.4.2.0
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libOpenGL.so
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libGLX.so
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libGLU.so
+endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libvulkan.so
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_highgui.so.4.2.0
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_datasets.so.4.2.0
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_plot.so.4.2.0
@@ -206,7 +222,7 @@ endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_photo.so.4.2.0
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.4.2.0
 endo_viewer_v4l: /usr/lib/x86_64-linux-gnu/libopencv_core.so.4.2.0
 endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX executable endo_viewer_v4l"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Linking CXX executable endo_viewer_v4l"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/endo_viewer_v4l.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

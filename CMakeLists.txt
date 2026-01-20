@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(endo_viewer_v4l)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -28,6 +28,16 @@ else(${OPENGL_FOUND})
     message(WARNING "Cannot found OpenGL.")
 endif(${OPENGL_FOUND})
 
+# Find Vulkan
+find_package(Vulkan REQUIRED)
+if(${Vulkan_FOUND})
+    message(STATUS "Vulkan library status:")
+    message(STATUS "  libraries: ${Vulkan_LIBRARIES}")
+    message(STATUS "  include path: ${Vulkan_INCLUDE_DIR}")
+else(${Vulkan_FOUND})
+    message(WARNING "Cannot found Vulkan.")
+endif(${Vulkan_FOUND})
+
 # Build target
 file(GLOB_RECURSE SRC_CPP ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 file(GLOB_RECURSE SRC_C ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
@@ -40,6 +50,7 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${OpenCV_INCLUDE_DIRS}>
         $<BUILD_INTERFACE:${OPENGL_INCLUDE_DIR}>
+        $<BUILD_INTERFACE:${Vulkan_INCLUDE_DIR}>
     PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
@@ -49,6 +60,7 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     ${OpenCV_LIBS}
     ${OPENGL_LIBRARIES}
+    ${Vulkan_LIBRARIES}
     turbojpeg
     glfw
     dl

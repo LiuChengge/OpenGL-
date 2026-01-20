@@ -19,6 +19,7 @@ set(CMAKE_C_TARGET_INCLUDE_PATH
 set(CMAKE_DEPENDS_CHECK_CXX
   "/home/lcg/code/endo_v4l_cv/main.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/main.cpp.o"
   "/home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o"
+  "/home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o"
   "/home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o"
   "/home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o"
   "/home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o"

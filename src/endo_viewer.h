@@ -3,6 +3,7 @@
 #include <thread>
 #include <cstdint>
 #include <opencv2/opencv.hpp>
+#include <atomic> // 引入 atomic 头文件
 
 class V4L2Capture;
 
@@ -33,6 +34,9 @@ private:
     bool _is_write_to_video;
     cv::VideoWriter  _writer;
     std::thread _thread_writer;
+
+    // ⭐ 新增：用于控制线程退出的原子标志位
+    std::atomic<bool> _keep_running;
 };
 
 #endif /* H_WLF_C5AA0CDA_9668_4C6C_B6F9_9EEFE7292C64 */

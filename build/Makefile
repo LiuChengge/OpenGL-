@@ -177,6 +177,33 @@ src/GLDisplay.cpp.s:
 	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.s
 .PHONY : src/GLDisplay.cpp.s
 
+src/VkDisplay.o: src/VkDisplay.cpp.o
+
+.PHONY : src/VkDisplay.o
+
+# target to build an object file
+src/VkDisplay.cpp.o:
+	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o
+.PHONY : src/VkDisplay.cpp.o
+
+src/VkDisplay.i: src/VkDisplay.cpp.i
+
+.PHONY : src/VkDisplay.i
+
+# target to preprocess a source file
+src/VkDisplay.cpp.i:
+	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.i
+.PHONY : src/VkDisplay.cpp.i
+
+src/VkDisplay.s: src/VkDisplay.cpp.s
+
+.PHONY : src/VkDisplay.s
+
+# target to generate assembly for a file
+src/VkDisplay.cpp.s:
+	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.s
+.PHONY : src/VkDisplay.cpp.s
+
 src/endo_viewer.o: src/endo_viewer.cpp.o
 
 .PHONY : src/endo_viewer.o
@@ -300,6 +327,9 @@ help:
 	@echo "... src/GLDisplay.o"
 	@echo "... src/GLDisplay.i"
 	@echo "... src/GLDisplay.s"
+	@echo "... src/VkDisplay.o"
+	@echo "... src/VkDisplay.i"
+	@echo "... src/VkDisplay.s"
 	@echo "... src/endo_viewer.o"
 	@echo "... src/endo_viewer.i"
 	@echo "... src/endo_viewer.s"

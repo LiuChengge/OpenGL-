@@ -1,6 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/endo_viewer_v4l.dir/main.cpp.o"
   "CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o"
+  "CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o"
   "CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o"
   "CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o"
   "CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o"

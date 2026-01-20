@@ -6,6 +6,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o: ../src/glad.c
 
 CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: ../main.cpp
 CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: ../src/endo_viewer.h
+CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: ../src/inc/VkDisplay.h
 CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: /usr/include/opencv4/opencv2/calib3d.hpp
 CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: /usr/include/opencv4/opencv2/core.hpp
 CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: /usr/include/opencv4/opencv2/core/affine.hpp
@@ -140,10 +141,14 @@ CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o: ../include/stb_image.h
 CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o: ../src/GLDisplay.cpp
 CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o: ../src/inc/GLDisplay.h
 
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: ../src/VkDisplay.cpp
+CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: ../src/inc/VkDisplay.h
+
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../include/glad/glad.h
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/endo_viewer.cpp
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/endo_viewer.h
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/inc/GLDisplay.h
+CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/inc/VkDisplay.h
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: ../src/inc/v4l2_capture.h
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: /usr/include/opencv4/opencv2/calib3d.hpp
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: /usr/include/opencv4/opencv2/core.hpp
