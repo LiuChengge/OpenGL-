@@ -1143,6 +1143,8 @@ void VkDisplay::createDescriptors() {
 }
 
 void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, int width, int height) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     // 使用当前帧对应的 staging buffer
     void* mapped = stagingBuffersMapped[currentFrame];
 
@@ -1160,7 +1162,15 @@ void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, i
     // 使用OpenCV SIMD加速转换（零拷贝）
     cv::cvtColor(leftBGR, leftRGBA, cv::COLOR_BGR2BGRA);
     cv::cvtColor(rightBGR, rightRGBA, cv::COLOR_BGR2BGRA);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
     // 注意：纹理上传将在recordCommandBuffer中进行，无需额外操作
+
+#ifdef DO_EFFECIENCY_TEST
+    printf("COLOR_CONVERSION: %ld us\n", duration.count());
+#endif
 }
 
 // 辅助函数：查找合适的内存类型
@@ -1557,7 +1567,7 @@ void VkDisplay::draw() {
     }
 
     // 强制GPU管道刷新，确保超低延迟（类似glFinish）
-    //vkDeviceWaitIdle(device);
+    vkDeviceWaitIdle(device);
 
     // 更新当前帧索引
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;

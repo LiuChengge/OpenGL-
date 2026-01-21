@@ -4,7 +4,7 @@
 #include "./inc/GLDisplay.h"
 #include "./inc/VkDisplay.h"
 
-#define DO_EFFECIENCY_TEST 1
+#define DO_EFFECIENCY_TEST 1  // 设置为1启用详细性能分析
 
 // 渲染模式切换：0 = 串行渲染（单线程），1 = 并行渲染（多线程）
 #define RENDER_MODE_PARALLEL 1
@@ -32,7 +32,15 @@ namespace {
         return std::string(tmp);
     }
 
-    const uint8_t TIME_INTTERVAL = 17;
+    // 新增：计算两个时间点之间的差值（微秒）
+    inline long getDurationBetween(const std::chrono::steady_clock::time_point &start,
+                                   const std::chrono::steady_clock::time_point &end)
+    {
+        return ::std::chrono::duration_cast<
+            std::chrono::microseconds>(end - start).count();
+    }
+
+    const uint8_t TIME_INTTERVAL = 17;  // 17ms
 }
 
 
@@ -108,9 +116,9 @@ void EndoViewer::readLeftImage(int index) {
         _new_frame_l.store(true, std::memory_order_release);
 
         auto ms = getDurationSince(time_start);
-// #if DO_EFFECIENCY_TEST
-//         printf("EndoViewer::readLeftImage: [%ld]ms elapsed.\n", ms);
-// #endif
+#if DO_EFFECIENCY_TEST
+        printf("CAMERA_ACQUIRE: [%ld]ms\n", ms);
+#endif
         if(ms < 17) {
             std::this_thread::sleep_for(std::chrono::milliseconds(TIME_INTTERVAL - ms));
         }
@@ -180,10 +188,14 @@ void EndoViewer::show() {
 
     printf("✅ Vulkan Initialized. Consuming camera feed...\n");
 
-    // 3. 主循环
+        // 3. 主循环
     while (!vkDisplay->shouldClose()) {
+        auto frame_start = ::getCurrentTimePoint();
+
         // 处理窗口事件 (必须在主线程调用)
         vkDisplay->pollEvents();
+
+        auto poll_end = ::getCurrentTimePoint();
 
         // 读取索引 = 1 - 写入索引（读取已完成写入的缓冲区）
         // 使用 memory_order_acquire 确保看到完整的帧数据
@@ -197,6 +209,8 @@ void EndoViewer::show() {
             continue;
         }
 
+        auto buffer_check_end = ::getCurrentTimePoint();
+
         // 4. 数据上传 (CPU -> Staging Buffer)
         // Vulkan 的 updateVideo 只是内存拷贝 (memcpy)，非常快
         vkDisplay->updateVideo(
@@ -204,10 +218,23 @@ void EndoViewer::show() {
             _image_r_buffers[read_idx_r].data,
             imwidth, imheight
         );
-        
+
+        auto upload_end = ::getCurrentTimePoint();
+
         // 5. 渲染提交 (Submit & Present)
         // 这一步是非阻塞的，除非 GPU 积压了超过 MAX_FRAMES_IN_FLIGHT 帧
         vkDisplay->draw();
+
+        auto draw_end = ::getCurrentTimePoint();
+
+#if DO_EFFECIENCY_TEST
+        printf("FRAME_PROFILE: poll=%ld us, buffer_check=%ld us, upload=%ld us, draw=%ld us, total=%ld us\n",
+               getDurationBetween(frame_start, poll_end),
+               getDurationBetween(poll_end, buffer_check_end),
+               getDurationBetween(buffer_check_end, upload_end),
+               getDurationBetween(upload_end, draw_end),
+               getDurationBetween(frame_start, draw_end));
+#endif
     }
 
     printf("EndoViewer: exit Vulkan mode.\n");

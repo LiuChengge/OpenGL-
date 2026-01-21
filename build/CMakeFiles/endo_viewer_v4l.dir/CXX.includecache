@@ -133,6 +133,8 @@ limits
 -
 fstream
 -
+chrono
+-
 
 /home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp
 mjpeg2jpeg.h
