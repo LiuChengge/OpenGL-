@@ -38,11 +38,14 @@ namespace {
 
 EndoViewer::EndoViewer()
     : imwidth(1920), imheight(1080)
-    , _image_l(cv::Mat(imheight, imwidth, CV_8UC3))
-    , _image_r(cv::Mat(imheight, imwidth, CV_8UC3))
     , _is_write_to_video(false)
     , _keep_running(true)
 {
+    // 初始化双缓冲的所有 Mat
+    for (int i = 0; i < 2; i++) {
+        _image_l_buffers[i] = cv::Mat(imheight, imwidth, CV_8UC3);
+        _image_r_buffers[i] = cv::Mat(imheight, imwidth, CV_8UC3);
+    }
 }
 
 
@@ -80,21 +83,29 @@ void EndoViewer::readLeftImage(int index) {
     while(_keep_running) {
         auto time_start = ::getCurrentTimePoint();
 
-        flag = _cap_l->ioctlDequeueBuffers(_image_l.data);
-        flag = flag && (!_image_l.empty());
+        // 获取当前写入索引
+        int write_idx = _write_index_l.load(std::memory_order_relaxed);
+
+        // 写入当前缓冲区
+        flag = _cap_l->ioctlDequeueBuffers(_image_l_buffers[write_idx].data);
+        flag = flag && (!_image_l_buffers[write_idx].empty());
 
         // // Debug: check data
         // if(flag) {
-        //     unsigned char* ptr = _image_l.data;
-        //     printf("Data Check Left: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_l.total() * _image_l.elemSize());
+        //     unsigned char* ptr = _image_l_buffers[write_idx].data;
+        //     printf("Data Check Left: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_l_buffers[write_idx].total() * _image_l_buffers[write_idx].elemSize());
         // }
 
         if(!flag) {
             printf("EndoViewer::readLeftImage: USB ID: %d, image empty: %d.\n",
-                    index, _image_l.empty());
+                    index, _image_l_buffers[write_idx].empty());
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
+
+        // 写入完成后，切换缓冲区索引（原子操作，确保渲染线程看到完整帧）
+        _write_index_l.store(1 - write_idx, std::memory_order_release);
+        _new_frame_l.store(true, std::memory_order_release);
 
         auto ms = getDurationSince(time_start);
 // #if DO_EFFECIENCY_TEST
@@ -119,21 +130,26 @@ void EndoViewer::readRightImage(int index) {
     while(_keep_running) {
         auto time_start = ::getCurrentTimePoint();
 
-        flag = _cap_r->ioctlDequeueBuffers(_image_r.data);
-        flag = flag && (!_image_r.empty());
+        int write_idx = _write_index_r.load(std::memory_order_relaxed);
+
+        flag = _cap_r->ioctlDequeueBuffers(_image_r_buffers[write_idx].data);
+        flag = flag && (!_image_r_buffers[write_idx].empty());
 
         // // Debug: check data
         // if(flag) {
-        //     unsigned char* ptr = _image_r.data;
-        //     printf("Data Check Right: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_r.total() * _image_r.elemSize());
+        //     unsigned char* ptr = _image_r_buffers[write_idx].data;
+        //     printf("Data Check Right: [0]=%02X [1]=%02X Size=%ld\n", ptr[0], ptr[1], _image_r_buffers[write_idx].total() * _image_r_buffers[write_idx].elemSize());
         // }
 
         if(!flag) {
             printf("EndoViewer::readRightImage: USB ID: %d, image empty: %d.\n",
-                    index, _image_r.empty());
+                    index, _image_r_buffers[write_idx].empty());
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
+
+        _write_index_r.store(1 - write_idx, std::memory_order_release);
+        _new_frame_r.store(true, std::memory_order_release);
 
         auto ms = getDurationSince(time_start);
 // #if DO_EFFECIENCY_TEST
@@ -169,16 +185,25 @@ void EndoViewer::show() {
         // 处理窗口事件 (必须在主线程调用)
         vkDisplay->pollEvents();
 
-        // 检查是否有新图像 (非阻塞检查)
-        // 注意：如果相机还没给数据，_image_l 可能为空，这里做个保护
-        if (_image_l.empty() || _image_r.empty()) {
+        // 读取索引 = 1 - 写入索引（读取已完成写入的缓冲区）
+        // 使用 memory_order_acquire 确保看到完整的帧数据
+        int read_idx_l = 1 - _write_index_l.load(std::memory_order_acquire);
+        int read_idx_r = 1 - _write_index_r.load(std::memory_order_acquire);
+
+        // 检查缓冲区是否有效
+        if (_image_l_buffers[read_idx_l].empty() ||
+            _image_r_buffers[read_idx_r].empty()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue; 
+            continue;
         }
 
         // 4. 数据上传 (CPU -> Staging Buffer)
         // Vulkan 的 updateVideo 只是内存拷贝 (memcpy)，非常快
-        vkDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
+        vkDisplay->updateVideo(
+            _image_l_buffers[read_idx_l].data,
+            _image_r_buffers[read_idx_r].data,
+            imwidth, imheight
+        );
         
         // 5. 渲染提交 (Submit & Present)
         // 这一步是非阻塞的，除非 GPU 积压了超过 MAX_FRAMES_IN_FLIGHT 帧
@@ -255,10 +280,15 @@ void EndoViewer::writeVideo() {
     cv::Mat bino;
     bool is_show_left = true;
     auto time_org = ::getCurrentTimePoint();
-    while(true) {
+    while(_keep_running) {  // 使用 _keep_running 而不是 while(true)
         auto time_start = ::getCurrentTimePoint();
 
-        cv::hconcat(_image_l, _image_r, bino);
+        // 使用双缓冲的读取索引
+        int read_idx_l = 1 - _write_index_l.load(std::memory_order_acquire);
+        int read_idx_r = 1 - _write_index_r.load(std::memory_order_acquire);
+
+        cv::hconcat(_image_l_buffers[read_idx_l],
+                    _image_r_buffers[read_idx_r], bino);
         _writer.write(bino);
 
         auto ms = getDurationSince(time_start);

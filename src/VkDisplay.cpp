@@ -255,16 +255,17 @@ void VkDisplay::createLogicalDevice() {
 }
 
 void VkDisplay::cleanup() {
-    // 销毁暂存缓冲区
-    if (stagingBufferMapped != nullptr) {
-        vkUnmapMemory(device, stagingBufferMemory);
-        stagingBufferMapped = nullptr;
-    }
-    if (stagingBuffer != VK_NULL_HANDLE) {
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-    }
-    if (stagingBufferMemory != VK_NULL_HANDLE) {
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+    // 销毁所有 staging buffers
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (stagingBuffersMapped[i] != nullptr) {
+            vkUnmapMemory(device, stagingBufferMemories[i]);
+        }
+        if (stagingBuffers[i] != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device, stagingBuffers[i], nullptr);
+        }
+        if (stagingBufferMemories[i] != VK_NULL_HANDLE) {
+            vkFreeMemory(device, stagingBufferMemories[i], nullptr);
+        }
     }
 
     // 销毁描述符池
@@ -518,23 +519,53 @@ VkSurfaceFormatKHR VkDisplay::chooseSwapSurfaceFormat(const std::vector<VkSurfac
 }
 
 VkPresentModeKHR VkDisplay::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
-    // 优先级1: Mailbox模式（低延迟，无撕裂）
-    for (const auto& availablePresentMode : availablePresentModes) {
-        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+    // 调试：列出所有可用的presentation modes
+    std::cout << "Available Vulkan Present Modes:" << std::endl;
+    for (const auto& mode : availablePresentModes) {
+        std::string modeName;
+        switch (mode) {
+            case VK_PRESENT_MODE_IMMEDIATE_KHR:
+                modeName = "VK_PRESENT_MODE_IMMEDIATE_KHR";
+                break;
+            case VK_PRESENT_MODE_MAILBOX_KHR:
+                modeName = "VK_PRESENT_MODE_MAILBOX_KHR";
+                break;
+            case VK_PRESENT_MODE_FIFO_KHR:
+                modeName = "VK_PRESENT_MODE_FIFO_KHR";
+                break;
+            case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
+                modeName = "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
+                break;
+            case VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR:
+                modeName = "VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR";
+                break;
+            case VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR:
+                modeName = "VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR";
+                break;
+            default:
+                modeName = "UNKNOWN_MODE";
+                break;
+        }
+        std::cout << "  Found Present Mode: " << static_cast<int>(mode) << " (" << modeName << ")" << std::endl;
+    }
+
+    // 1. 理论最优：Mailbox（低延迟，无撕裂），保留检查以防驱动更新支持
+    for (const auto& mode : availablePresentModes) {
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             std::cout << "Using Mailbox Mode (low latency, no tearing)" << std::endl;
-            return availablePresentMode;
+            return mode;
         }
     }
 
-    // 优先级2: Immediate模式（超低延迟，允许撕裂）
-    for (const auto& availablePresentMode : availablePresentModes) {
-        if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
-            std::cout << "Using Immediate Mode (lowest latency, tearing allowed)" << std::endl;
-            return availablePresentMode;
+    // 2. 实际最优：FIFO_RELAXED（智能VSync，低延迟+无撕裂的平衡）
+    for (const auto& mode : availablePresentModes) {
+        if (mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
+            std::cout << "Using FIFO Relaxed Mode (Smart VSync)" << std::endl;
+            return mode;
         }
     }
 
-    // Fallback: FIFO模式（标准VSync）
+    // 3. 保底：FIFO（标准VSync）
     std::cout << "Using FIFO Mode (standard VSync)" << std::endl;
     return VK_PRESENT_MODE_FIFO_KHR;
 }
@@ -1016,34 +1047,40 @@ void VkDisplay::createTextureResources() {
 void VkDisplay::createStagingBuffer() {
     VkDeviceSize bufferSize = 1920 * 1080 * 4 * 2;  // 左眼 + 右眼，RGBA格式
 
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = bufferSize;
-    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    stagingBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    stagingBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
+    stagingBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
-    if (vkCreateBuffer(device, &bufferInfo, nullptr, &stagingBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create staging buffer!");
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = bufferSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &stagingBuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create staging buffer!");
+        }
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, stagingBuffers[i], &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
+                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &stagingBufferMemories[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate staging buffer memory!");
+        }
+
+        vkBindBufferMemory(device, stagingBuffers[i], stagingBufferMemories[i], 0);
+
+        // 持久映射内存
+        vkMapMemory(device, stagingBufferMemories[i], 0, bufferSize, 0, &stagingBuffersMapped[i]);
     }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(device, stagingBuffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
-                                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    if (vkAllocateMemory(device, &allocInfo, nullptr, &stagingBufferMemory) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate staging buffer memory!");
-    }
-
-    vkBindBufferMemory(device, stagingBuffer, stagingBufferMemory, 0);
-
-    // 持久映射内存
-    vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &stagingBufferMapped);
 }
 
 void VkDisplay::createDescriptors() {
@@ -1106,7 +1143,8 @@ void VkDisplay::createDescriptors() {
 }
 
 void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, int width, int height) {
-    // 使用OpenCV进行SIMD加速的BGR到RGBA转换（零拷贝）
+    // 使用当前帧对应的 staging buffer
+    void* mapped = stagingBuffersMapped[currentFrame];
 
     // 左眼图像：包装外部数据为cv::Mat（不分配新内存）
     cv::Mat leftBGR(height, width, CV_8UC3, leftData);
@@ -1114,10 +1152,10 @@ void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, i
     cv::Mat rightBGR(height, width, CV_8UC3, rightData);
 
     // 左眼目标：包装暂存缓冲区为cv::Mat（不分配新内存）
-    cv::Mat leftRGBA(height, width, CV_8UC4, static_cast<unsigned char*>(stagingBufferMapped));
+    cv::Mat leftRGBA(height, width, CV_8UC4, static_cast<unsigned char*>(mapped));
     // 右眼目标：包装暂存缓冲区第二部分为cv::Mat（不分配新内存）
     cv::Mat rightRGBA(height, width, CV_8UC4,
-                      static_cast<unsigned char*>(stagingBufferMapped) + width * height * 4);
+                      static_cast<unsigned char*>(mapped) + width * height * 4);
 
     // 使用OpenCV SIMD加速转换（零拷贝）
     cv::cvtColor(leftBGR, leftRGBA, cv::COLOR_BGR2BGRA);
@@ -1238,7 +1276,7 @@ void VkDisplay::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
     leftRegion.imageOffset = {0, 0, 0};
     leftRegion.imageExtent = {1920, 1080, 1};
 
-    vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, leftTextureImage,
+    vkCmdCopyBufferToImage(commandBuffer, stagingBuffers[currentFrame], leftTextureImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &leftRegion);
 
     // --- 左眼: Transfer Dst -> Shader Read ---
@@ -1274,7 +1312,7 @@ void VkDisplay::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
     rightRegion.imageOffset = {0, 0, 0};
     rightRegion.imageExtent = {1920, 1080, 1};
 
-    vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, rightTextureImage,
+    vkCmdCopyBufferToImage(commandBuffer, stagingBuffers[currentFrame], rightTextureImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &rightRegion);
 
     // --- 右眼: Transfer Dst -> Shader Read ---
@@ -1519,7 +1557,7 @@ void VkDisplay::draw() {
     }
 
     // 强制GPU管道刷新，确保超低延迟（类似glFinish）
-    vkDeviceWaitIdle(device);
+    //vkDeviceWaitIdle(device);
 
     // 更新当前帧索引
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;

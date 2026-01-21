@@ -101,10 +101,10 @@ private:
     VkDescriptorPool descriptorPool;
     VkDescriptorSet descriptorSet;
 
-    // 暂存缓冲区用于上传
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    void* stagingBufferMapped = nullptr;
+    // Staging Buffer（支持多缓冲以实现 CPU/GPU 并行）
+    std::vector<VkBuffer> stagingBuffers;
+    std::vector<VkDeviceMemory> stagingBufferMemories;
+    std::vector<void*> stagingBuffersMapped;
 
     // 命令缓冲区和同步对象
     std::vector<VkCommandBuffer> commandBuffers;
@@ -112,7 +112,9 @@ private:
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
-    const int MAX_FRAMES_IN_FLIGHT = 1;
+
+    // 配置常量
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 1;  // 改为 1 启用低延迟模式
     bool framebufferResized = false;
 
     // Vulkan初始化辅助函数
