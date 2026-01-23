@@ -13,6 +13,7 @@
 			"add_executable",
 			"target_link_libraries",
 			"add_dependencies",
+			"target_compile_definitions",
 			"target_include_directories"
 		],
 		"files" : 
@@ -33,7 +34,7 @@
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 72,
+				"line" : 76,
 				"parent" : 0
 			},
 			{
@@ -45,7 +46,13 @@
 			{
 				"command" : 3,
 				"file" : 0,
-				"line" : 61,
+				"line" : 64,
+				"parent" : 0
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 65,
 				"parent" : 0
 			}
 		]
@@ -62,22 +69,33 @@
 					"fragment" : "-std=gnu++17"
 				}
 			],
-			"includes" : 
+			"defines" : 
 			[
 				{
 					"backtrace" : 4,
+					"define" : "TEST_OPENGL_NO_VSYNC=1"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "USE_VULKAN=0"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 5,
 					"path" : "/home/lcg/code/endo_v4l_cv/src"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"path" : "/home/lcg/code/endo_v4l_cv/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"path" : "/opt/libjpeg-turbo/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"isSystem" : true,
 					"path" : "/usr/include/opencv4"
 				}
@@ -100,22 +118,33 @@
 					"fragment" : "-O3 -DNDEBUG  "
 				}
 			],
-			"includes" : 
+			"defines" : 
 			[
 				{
 					"backtrace" : 4,
+					"define" : "TEST_OPENGL_NO_VSYNC=1"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "USE_VULKAN=0"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 5,
 					"path" : "/home/lcg/code/endo_v4l_cv/src"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"path" : "/home/lcg/code/endo_v4l_cv/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"path" : "/opt/libjpeg-turbo/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 5,
 					"isSystem" : true,
 					"path" : "/usr/include/opencv4"
 				}

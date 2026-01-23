@@ -9,6 +9,8 @@
 // 渲染模式切换：0 = 串行渲染（单线程），1 = 并行渲染（多线程）
 #define RENDER_MODE_PARALLEL 1
 
+// 后端选择：0 = OpenGL模式, 1 = Vulkan模式 (通过CMake定义)
+
 namespace {
 
     std::chrono::steady_clock::time_point getCurrentTimePoint() {
@@ -172,12 +174,18 @@ void EndoViewer::readRightImage(int index) {
 
 void EndoViewer::show() {
     printf("============================================================\n");
+#if USE_VULKAN
     printf("🚀 Starting Vulkan Low-Latency Mode (Mailbox Strategy)\n");
+#else
+    printf("🚀 Starting OpenGL Low-Latency Mode\n");
+#endif
     printf("============================================================\n");
 
+#if USE_VULKAN
+    // ========== VULKAN BACKEND ==========
     // 1. 创建 Vulkan 显示实例
     VkDisplay* vkDisplay = new VkDisplay();
-    
+
     // 2. 初始化 (注意：VkDisplay 内部已经封装了 GLFW 窗口创建)
     // 参数 2 是 dummy，因为 Vulkan 实现里不依赖这个数量，但为了兼容接口保留
     if (!vkDisplay->init(1920, 540, "Endoscope Viewer - Vulkan")) {
@@ -187,8 +195,36 @@ void EndoViewer::show() {
     }
 
     printf("✅ Vulkan Initialized. Consuming camera feed...\n");
+#endif
 
-        // 3. 主循环
+#if !USE_VULKAN
+    // ========== OPENGL BACKEND ==========
+    // Initialize OpenGL display with 2 windows for latency testing
+    GLDisplay* glDisplay = new GLDisplay();
+    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
+        printf("Failed to initialize GLDisplay\n");
+        delete glDisplay;
+        return;
+    }
+
+    if (!glDisplay->setupTexture(imwidth, imheight)) {
+        printf("Failed to setup GLDisplay texture\n");
+        delete glDisplay;
+        return;
+    }
+
+    // 打印当前使用的渲染模式（VSync开启）
+    printf("Real camera latency test: consuming V4L2 camera feeds...\n");
+#if RENDER_MODE_PARALLEL
+    printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
+#else
+    printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
+#endif
+#endif
+
+#if USE_VULKAN
+    // ========== VULKAN MAIN LOOP ==========
+    // 3. 主循环
     while (!vkDisplay->shouldClose()) {
         auto frame_start = ::getCurrentTimePoint();
 
@@ -245,54 +281,42 @@ void EndoViewer::show() {
 
     vkDisplay->cleanup();
     delete vkDisplay;
+#endif
 
-//     // OpenGL low-latency display mode for camera latency testing
-//     // Replace original OpenCV display with OpenGL for minimal latency
-//     printf("Starting OpenGL real camera latency test mode...\n");
+#if !USE_VULKAN
+    // ========== OPENGL MAIN LOOP ==========
+    // Main display loop - no frame rate limiting for latency testing
+    while (!glDisplay->shouldClose()) {
+        // Check if camera data is ready
+        if (_image_l_buffers[0].empty() || _image_r_buffers[0].empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
 
-//     // Initialize OpenGL display with 2 windows for latency testing
-//     GLDisplay* glDisplay = new GLDisplay();
-//     if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
-//         printf("Failed to initialize GLDisplay\n");
-//         delete glDisplay;
-//         return;
-//     }
+        // 测量OpenGL各阶段耗时
+        auto t1 = ::getCurrentTimePoint();
+        // Direct OpenGL rendering without data copying for minimum latency
+        glDisplay->updateVideo(_image_l_buffers[0].data, _image_r_buffers[0].data, imwidth, imheight);
+        auto t2 = ::getCurrentTimePoint();
 
-//     if (!glDisplay->setupTexture(imwidth, imheight)) {
-//         printf("Failed to setup GLDisplay texture\n");
-//         delete glDisplay;
-//         return;
-//     }
+        // 根据宏选择渲染模式
+#if RENDER_MODE_PARALLEL
+        auto t3 = ::getCurrentTimePoint();
+        glDisplay->drawParallel();
+        auto t4 = ::getCurrentTimePoint();
+        printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+#else
+        auto t3 = ::getCurrentTimePoint();
+        glDisplay->drawSerial();
+        auto t4 = ::getCurrentTimePoint();
+        printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+#endif
+    }
 
-//     // 打印当前使用的渲染模式（VSync开启）
-//     printf("Real camera latency test: consuming V4L2 camera feeds...\n");
-// #if RENDER_MODE_PARALLEL
-//     printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
-// #else
-//     printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
-// #endif
-
-//     // Main display loop - no frame rate limiting for latency testing
-//     while (!glDisplay->shouldClose()) {
-//         // Check if camera data is ready
-//         if (_image_l.rows == 0 || _image_r.rows == 0) {
-//             continue;
-//         }
-
-//         // Direct OpenGL rendering without data copying for minimum latency
-//         glDisplay->updateVideo(_image_l.data, _image_r.data, imwidth, imheight);
-        
-//         // 根据宏选择渲染模式
-// #if RENDER_MODE_PARALLEL
-//         glDisplay->drawParallel();
-// #else
-//         glDisplay->drawSerial();
-// #endif
-//     }
-
-//     printf("EndoViewer: exit OpenGL latency test mode.\n");
-//     glDisplay->cleanup();
-//     delete glDisplay;
+    printf("EndoViewer: exit OpenGL latency test mode.\n");
+    glDisplay->cleanup();
+    delete glDisplay;
+#endif
 }
 
 

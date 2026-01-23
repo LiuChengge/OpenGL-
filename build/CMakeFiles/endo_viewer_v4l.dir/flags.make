@@ -5,13 +5,13 @@
 # compile CXX with /usr/bin/c++
 C_FLAGS = -O3 -DNDEBUG  
 
-C_DEFINES = 
+C_DEFINES = -DTEST_OPENGL_NO_VSYNC=1 -DUSE_VULKAN=0
 
 C_INCLUDES = -I/home/lcg/code/endo_v4l_cv/src -I/home/lcg/code/endo_v4l_cv/include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4 
 
 CXX_FLAGS = -O3 -DNDEBUG   -std=gnu++17
 
-CXX_DEFINES = 
+CXX_DEFINES = -DTEST_OPENGL_NO_VSYNC=1 -DUSE_VULKAN=0
 
 CXX_INCLUDES = -I/home/lcg/code/endo_v4l_cv/src -I/home/lcg/code/endo_v4l_cv/include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4 
 

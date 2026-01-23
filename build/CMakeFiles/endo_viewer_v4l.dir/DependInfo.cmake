@@ -9,6 +9,12 @@ set(CMAKE_DEPENDS_CHECK_C
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 
+# Preprocessor definitions for this target.
+set(CMAKE_TARGET_DEFINITIONS_C
+  "TEST_OPENGL_NO_VSYNC=1"
+  "USE_VULKAN=0"
+  )
+
 # The include file search paths:
 set(CMAKE_C_TARGET_INCLUDE_PATH
   "../src"
@@ -25,6 +31,12 @@ set(CMAKE_DEPENDS_CHECK_CXX
   "/home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.cpp" "/home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
+
+# Preprocessor definitions for this target.
+set(CMAKE_TARGET_DEFINITIONS_CXX
+  "TEST_OPENGL_NO_VSYNC=1"
+  "USE_VULKAN=0"
+  )
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
