@@ -1,3 +1,4 @@
 /home/lcg/code/endo_v4l_cv/build/CMakeFiles/rebuild_cache.dir
 /home/lcg/code/endo_v4l_cv/build/CMakeFiles/edit_cache.dir
 /home/lcg/code/endo_v4l_cv/build/CMakeFiles/endo_viewer_v4l.dir
+/home/lcg/code/endo_v4l_cv/build/CMakeFiles/shaders.dir

@@ -54,6 +54,7 @@ CMAKE_BINARY_DIR = /home/lcg/code/endo_v4l_cv/build
 
 # The main recursive "all" target.
 all: CMakeFiles/endo_viewer_v4l.dir/all
+all: CMakeFiles/shaders.dir/all
 
 .PHONY : all
 
@@ -64,6 +65,7 @@ preinstall:
 
 # The main recursive "clean" target.
 clean: CMakeFiles/endo_viewer_v4l.dir/clean
+clean: CMakeFiles/shaders.dir/clean
 
 .PHONY : clean
 
@@ -71,7 +73,7 @@ clean: CMakeFiles/endo_viewer_v4l.dir/clean
 # Target rules for target CMakeFiles/endo_viewer_v4l.dir
 
 # All Build rule for target.
-CMakeFiles/endo_viewer_v4l.dir/all:
+CMakeFiles/endo_viewer_v4l.dir/all: CMakeFiles/shaders.dir/all
 	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/depend
 	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Built target endo_viewer_v4l"
@@ -79,7 +81,7 @@ CMakeFiles/endo_viewer_v4l.dir/all:
 
 # Build rule for subdir invocation for target.
 CMakeFiles/endo_viewer_v4l.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/lcg/code/endo_v4l_cv/build/CMakeFiles 8
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/lcg/code/endo_v4l_cv/build/CMakeFiles 9
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/endo_viewer_v4l.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/lcg/code/endo_v4l_cv/build/CMakeFiles 0
 .PHONY : CMakeFiles/endo_viewer_v4l.dir/rule
@@ -93,6 +95,33 @@ endo_viewer_v4l: CMakeFiles/endo_viewer_v4l.dir/rule
 CMakeFiles/endo_viewer_v4l.dir/clean:
 	$(MAKE) -f CMakeFiles/endo_viewer_v4l.dir/build.make CMakeFiles/endo_viewer_v4l.dir/clean
 .PHONY : CMakeFiles/endo_viewer_v4l.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/shaders.dir
+
+# All Build rule for target.
+CMakeFiles/shaders.dir/all:
+	$(MAKE) -f CMakeFiles/shaders.dir/build.make CMakeFiles/shaders.dir/depend
+	$(MAKE) -f CMakeFiles/shaders.dir/build.make CMakeFiles/shaders.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/lcg/code/endo_v4l_cv/build/CMakeFiles --progress-num=9 "Built target shaders"
+.PHONY : CMakeFiles/shaders.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/shaders.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/lcg/code/endo_v4l_cv/build/CMakeFiles 1
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/shaders.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/lcg/code/endo_v4l_cv/build/CMakeFiles 0
+.PHONY : CMakeFiles/shaders.dir/rule
+
+# Convenience name for target.
+shaders: CMakeFiles/shaders.dir/rule
+
+.PHONY : shaders
+
+# clean rule for target.
+CMakeFiles/shaders.dir/clean:
+	$(MAKE) -f CMakeFiles/shaders.dir/build.make CMakeFiles/shaders.dir/clean
+.PHONY : CMakeFiles/shaders.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

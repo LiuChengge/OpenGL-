@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
 
     // Then run original EndoViewer for OpenGL display mode
     EndoViewer endo_viewer;
-    endo_viewer.startup(0, 2, false);
+    endo_viewer.startup(4, 6, false);
     // endo_viewer.startup(6, 7, false);
     
     return 0;

@@ -38,6 +38,15 @@ else(${Vulkan_FOUND})
     message(WARNING "Cannot found Vulkan.")
 endif(${Vulkan_FOUND})
 
+# Compile GLSL shaders to SPIR-V
+add_custom_target(shaders ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/src/shaders/*.glsl ${CMAKE_BINARY_DIR}/shaders/
+    COMMAND glslangValidator -V -S vert ${CMAKE_BINARY_DIR}/shaders/vert.glsl -o ${CMAKE_BINARY_DIR}/shaders/vert.spv
+    COMMAND glslangValidator -V -S frag ${CMAKE_BINARY_DIR}/shaders/frag.glsl -o ${CMAKE_BINARY_DIR}/shaders/frag.spv
+    COMMENT "Compiling GLSL shaders to SPIR-V"
+)
+
 # Build target
 file(GLOB_RECURSE SRC_CPP ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 file(GLOB_RECURSE SRC_C ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
@@ -46,6 +55,9 @@ add_executable(${PROJECT_NAME}
     ${SRC_CPP}
     ${SRC_C}
 )
+
+# Make sure shaders are built before the main executable
+add_dependencies(${PROJECT_NAME} shaders)
 target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${OpenCV_INCLUDE_DIRS}>
