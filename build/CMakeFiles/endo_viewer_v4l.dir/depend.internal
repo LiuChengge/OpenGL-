@@ -137,11 +137,13 @@ CMakeFiles/endo_viewer_v4l.dir/main.cpp.o
  /usr/include/opencv4/opencv2/viz/vizcore.hpp
  /usr/include/opencv4/opencv2/viz/widgets.hpp
 CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o
+ ../include/efficiency_test.h
  ../include/glad/glad.h
  ../include/stb_image.h
  /home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp
  /home/lcg/code/endo_v4l_cv/src/inc/GLDisplay.h
 CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o
+ ../include/efficiency_test.h
  /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp
  /home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
  /usr/include/opencv4/opencv2/calib3d.hpp
@@ -273,6 +275,7 @@ CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o
  /usr/include/opencv4/opencv2/viz/vizcore.hpp
  /usr/include/opencv4/opencv2/viz/widgets.hpp
 CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o
+ ../include/efficiency_test.h
  ../include/glad/glad.h
  /home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp
  /home/lcg/code/endo_v4l_cv/src/endo_viewer.h

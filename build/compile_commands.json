@@ -1,0 +1,43 @@
+[
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/main.cpp.o -c /home/lcg/code/endo_v4l_cv/main.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/main.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o -c /home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/src/GLDisplay.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o -c /home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/src/VkDisplay.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o -c /home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/src/endo_viewer.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o -c /home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/src/inc/mjpeg2jpeg.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/g++  -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -std=gnu++17 -o CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o -c /home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.cpp",
+  "file": "/home/lcg/code/endo_v4l_cv/src/inc/v4l2_capture.cpp"
+},
+
+{
+  "directory": "/home/lcg/code/endo_v4l_cv/build",
+  "command": "/usr/bin/gcc -DUSE_VULKAN=1 -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4  -g   -o CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o   -c /home/lcg/code/endo_v4l_cv/src/glad.c",
+  "file": "/home/lcg/code/endo_v4l_cv/src/glad.c"
+}
+]

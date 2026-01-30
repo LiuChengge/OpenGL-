@@ -38,6 +38,10 @@ private:
     std::atomic<int> _write_index_l{0};
     std::atomic<int> _write_index_r{0};
 
+    // 帧 ID 追踪（用于最新帧策略）
+    std::atomic<uint64_t> _frame_id_l{0};
+    std::atomic<uint64_t> _frame_id_r{0};
+
     // 标记是否有新帧就绪（可选，用于跳帧检测）
     std::atomic<bool> _new_frame_l{false};
     std::atomic<bool> _new_frame_r{false};

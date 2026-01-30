@@ -66,6 +66,17 @@ public:
      */
     void cleanup();
 
+    // ========== VSync 相位追踪（Just-in-Time 提交优化）==========
+    static constexpr double VSYNC_PERIOD_MS = 16.667;  // 60Hz VSync 周期
+    static constexpr double SUBMIT_AHEAD_MS = 2.0;     // 提交提前量
+
+    /**
+     * @brief 计算到下一个 VSync 的剩余时间（毫秒）
+     * @return 剩余时间，正数表示还有多久到下一个 VSync，负数表示已过
+     */
+    double getTimeToNextVSync();
+    // ============================================================
+
 private:
     // GLFW窗口
     GLFWwindow* window = nullptr;
@@ -117,6 +128,9 @@ private:
     // 配置常量
     static constexpr int MAX_FRAMES_IN_FLIGHT = 1;  // 改为 1 启用低延迟模式
     bool framebufferResized = false;
+
+    // VSync 相位追踪（用于 Just-in-Time 提交优化）
+    std::chrono::steady_clock::time_point lastPresentTime;  // 最近一次 vkQueuePresentKHR 的时间
 
     // Vulkan初始化辅助函数
     void initGLFW(int width, int height, std::string title);

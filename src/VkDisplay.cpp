@@ -1,5 +1,6 @@
 #include "inc/VkDisplay.h"
 #include <opencv2/opencv.hpp>
+#include "efficiency_test.h"
 
 // Vulkan验证层
 const std::vector<const char*> validationLayers = {
@@ -17,7 +18,10 @@ const std::vector<const char*> deviceExtensions = {
     const bool enableValidationLayers = true;
 #endif
 
-VkDisplay::VkDisplay() {}
+VkDisplay::VkDisplay() {
+    // 初始化 VSync 追踪时间点为一个很早的时间，确保第一次 getTimeToNextVSync() 返回正值
+    lastPresentTime = std::chrono::steady_clock::now() - std::chrono::milliseconds(100);
+}
 
 VkDisplay::~VkDisplay() {
     cleanup();
@@ -507,15 +511,25 @@ VkDisplay::SwapChainSupportDetails VkDisplay::querySwapChainSupport(VkPhysicalDe
 }
 
 VkSurfaceFormatKHR VkDisplay::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+    // 优先选择不带硬件sRGB（gamma）校正的 UNORM 格式，以保证与相机的线性/直通输出一致。
+    // 选择流程：
+    // 1) 尝试找到 VK_FORMAT_B8G8R8A8_UNORM（线性/直通）
+    // 2) 如果不存在，再退回到 VK_FORMAT_B8G8R8A8_SRGB（sRGB）作为次选
+    // 3) 最后回退到第一个可用格式
+    VkSurfaceFormatKHR fallbackSRGB = availableFormats[0];
+
     for (const auto& availableFormat : availableFormats) {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM) {
+            return availableFormat;
+        }
         if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
             availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return availableFormat;
+            // 保存为次选，以便在没有 UNORM 时使用
+            fallbackSRGB = availableFormat;
         }
     }
 
-    // 如果首选格式不可用，返回第一个可用的格式
-    return availableFormats[0];
+    return fallbackSRGB;
 }
 
 VkPresentModeKHR VkDisplay::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
@@ -1168,7 +1182,7 @@ void VkDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, i
 
     // 注意：纹理上传将在recordCommandBuffer中进行，无需额外操作
 
-#ifdef DO_EFFECIENCY_TEST
+#if DO_EFFECIENCY_TEST
     printf("COLOR_CONVERSION: %ld us\n", duration.count());
 #endif
 }
@@ -1502,13 +1516,19 @@ void VkDisplay::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 }
 
 void VkDisplay::draw() {
-    // 等待之前的帧完成
+    // 等待当前槽位的上一次使用完成
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
     // 获取下一个可用的交换链图像
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
-                                           imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(
+        device,
+        swapChain,
+        UINT64_MAX,
+        imageAvailableSemaphores[currentFrame],
+        VK_NULL_HANDLE,
+        &imageIndex
+    );
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapChain();
@@ -1517,28 +1537,26 @@ void VkDisplay::draw() {
         throw std::runtime_error("Failed to acquire swap chain image!");
     }
 
-    // 重置栅栏
+    // 重置栅栏，为本帧提交做准备
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-    // 重置命令缓冲区
+    // 重置并记录本帧命令缓冲区
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-
-    // 重新记录命令缓冲区（包含最新的纹理数据）
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
     // 提交命令缓冲区
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 
-    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -1546,13 +1564,13 @@ void VkDisplay::draw() {
         throw std::runtime_error("Failed to submit draw command buffer!");
     }
 
-    // 呈现图像
+    // 呈现图像：等待渲染完成信号量，保持无撕裂 VSync（FIFO / MAILBOX）
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = signalSemaphores;
 
-    VkSwapchainKHR swapChains[] = {swapChain};
+    VkSwapchainKHR swapChains[] = { swapChain };
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
@@ -1566,9 +1584,34 @@ void VkDisplay::draw() {
         throw std::runtime_error("Failed to present swap chain image!");
     }
 
-    // 强制GPU管道刷新，确保超低延迟（类似glFinish）
-    vkDeviceWaitIdle(device);
+    // ===== VSync 相位追踪 =====
+    // 记录最近一次 Present 的时间点，用于 Just-in-Time 提交优化
+    lastPresentTime = std::chrono::steady_clock::now();
 
-    // 更新当前帧索引
+    // ===== 60Hz FIFO 优化：移除 vkQueueWaitIdle，仅依赖 vkWaitForFences =====
+    // 原因：vkWaitForFences 在 draw() 开头已保证上一帧完成，额外的 vkQueueWaitIdle
+    //      会导致等待时间不稳定（有时 0ms，有时 10+ms），增大方差。移除后依赖
+    //      fence + semaphore 同步，相位关系更可预测。
+    // 注意：如果测试发现均值显著增加（>5ms），可考虑恢复 vkDeviceWaitIdle 作为折中。
+
+    // 更新当前帧索引（单缓冲模式，currentFrame 始终为 0）
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+double VkDisplay::getTimeToNextVSync() {
+    // 计算从最近一次 Present 到当前的时间差
+    auto now = std::chrono::steady_clock::now();
+    double elapsedMs = std::chrono::duration<double, std::milli>(now - lastPresentTime).count();
+
+    // 计算距离下一个 VSync 的剩余时间
+    double remaining = VSYNC_PERIOD_MS - elapsedMs;
+
+#if DO_EFFECIENCY_TEST
+    // 首次调用时（elapsedMs 可能很大），返回合理的正值
+    if (elapsedMs > VSYNC_PERIOD_MS * 2) {
+        remaining = VSYNC_PERIOD_MS;
+    }
+#endif
+
+    return remaining;
 }

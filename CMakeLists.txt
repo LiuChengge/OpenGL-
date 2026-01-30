@@ -61,7 +61,7 @@ add_dependencies(${PROJECT_NAME} shaders)
 
 # Define backend selection macro (0 = OpenGL, 1 = Vulkan)
 # Change to 1 to use Vulkan backend, 0 for OpenGL backend
-target_compile_definitions(${PROJECT_NAME} PRIVATE USE_VULKAN=0)
+target_compile_definitions(${PROJECT_NAME} PRIVATE USE_VULKAN=1)
 target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${OpenCV_INCLUDE_DIRS}>

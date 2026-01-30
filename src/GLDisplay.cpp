@@ -2,9 +2,15 @@
 #include <iostream>
 #include <cstdio>
 #include <stb_image.h>
+#include "efficiency_test.h"
+#include <cstdlib>
 
 GLDisplay::GLDisplay() : shaderProgram(0), VBO(0), EBO(0), windowWidth(0), windowHeight(0),
     texLeftLocation(-1), texRightLocation(-1) {
+    // 初始化帧追踪数组
+    for (int i = 0; i < MAX_TRACKED_FRAMES; i++) {
+        frame_fences[i] = nullptr;
+    }
 }
 
 GLDisplay::~GLDisplay() {
@@ -40,12 +46,18 @@ bool GLDisplay::init(int width, int height, std::string title, int numWindows) {
         setupQuad(i);
     }
 
-    // 初始化持久线程池（用于并行渲染）
-    initWorkers();
+    // 初始化每窗口的 fence / swap 状态（initGLFW 已经创建 windows 列表）
+    window_frame_fences.resize(windows.size());
+    window_swap_timestamps.resize(windows.size());
+    for (size_t i = 0; i < windows.size(); ++i) {
+        window_frame_fences[i] = nullptr;
+    }
 
     // 设置背景清除颜色为黑色（在第一个窗口上下文中）
     glfwMakeContextCurrent(windows[0]);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // 释放主线程上下文，允许 worker 线程绑定并长期持有各自窗口上下文
+    glfwMakeContextCurrent(NULL);
 
     return true;
 }
@@ -217,11 +229,20 @@ void GLDisplay::setupQuad(int windowIndex) {
 }
 
 unsigned int GLDisplay::setupTexture(int width, int height) {
+    // 临时绑定第一个窗口的上下文，确保在没有长期绑定上下文时仍能创建纹理资源
+    if (!windows.empty()) {
+        glfwMakeContextCurrent(windows[0]);
+    }
+
     // 创建左眼纹理
     glGenTextures(1, &leftTexID);
     glBindTexture(GL_TEXTURE_2D, leftTexID);
-    // 分配纹理内存（初始为空）
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    // 分配纹理内存并初始化为白色，以便验证渲染管线（避免黑屏由空纹理引起）
+    {
+        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+        std::vector<unsigned char> white(sz, 255);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, white.data());
+    }
     // 设置纹理参数
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -231,36 +252,35 @@ unsigned int GLDisplay::setupTexture(int width, int height) {
     // 创建右眼纹理
     glGenTextures(1, &rightTexID);
     glBindTexture(GL_TEXTURE_2D, rightTexID);
-    // 分配纹理内存（初始为空）
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    {
+        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+        std::vector<unsigned char> white(sz, 255);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, white.data());
+    }
     // 设置纹理参数
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    // 释放临时绑定的上下文（恢复到无上下文，保持 worker 的持久绑定不被干扰）
+    if (!windows.empty()) {
+        glfwMakeContextCurrent(NULL);
+    }
+
+    // 所有 GL 资源已创建，安全地启动 worker 线程（worker 将长期持有各自上下文）
+    initWorkers();
+
     return leftTexID; // 返回左纹理ID以保持兼容性
 }
 
 void GLDisplay::updateVideo(unsigned char* leftData, unsigned char* rightData, int width, int height) {
-    // 纹理是共享的，只需要在任意一个有效上下文中更新一次
-    // 使用第一个窗口的上下文
-    if (windows.empty()) return;
-    
-    glfwMakeContextCurrent(windows[0]);
-    
-    // 更新左眼纹理数据
-    glBindTexture(GL_TEXTURE_2D, leftTexID);
-    // 使用glTexSubImage2D高效更新纹理（支持OpenCV的BGR格式）
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, leftData);
-
-    // 更新右眼纹理数据
-    glBindTexture(GL_TEXTURE_2D, rightTexID);
-    // 使用glTexSubImage2D高效更新纹理（支持OpenCV的BGR格式）
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rightData);
-
-    // 释放上下文，避免与渲染线程冲突
-    glfwMakeContextCurrent(NULL);
+    // 不在主线程进行任何 GL 调用，改为仅更新指针/尺寸供 worker 线程在其持久上下文中上传
+    std::lock_guard<std::mutex> lock(mtx);
+    currentLeftData = leftData;
+    currentRightData = rightData;
+    currentImgWidth = width;
+    currentImgHeight = height;
 }
 
 void GLDisplay::draw() {
@@ -278,17 +298,92 @@ void GLDisplay::draw() {
     glBindVertexArray(VAOs[0]);
 
     // 绑定左眼纹理到纹理单元0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, leftTexID);
+    // 在持久上下文中上传最新的纹理数据（如果有）— 先从共享状态读取指针
+    const unsigned char* leftPtr = nullptr;
+    const unsigned char* rightPtr = nullptr;
+    int imgW = 0, imgH = 0;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        leftPtr = currentLeftData;
+        rightPtr = currentRightData;
+        imgW = currentImgWidth;
+        imgH = currentImgHeight;
+    }
+
+    static auto last_upload_log = std::chrono::steady_clock::now() - std::chrono::seconds(2);
+    if (leftPtr && imgW > 0 && imgH > 0) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, leftTexID);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, leftPtr);
+
+        // 每秒打印一次上传心跳，帮助确认上传确实发生
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_upload_log >= std::chrono::seconds(1)) {
+            last_upload_log = now;
+            printf("Uploading texture frame...\n");
+        }
+
+        // 检查并打印任何 GL 错误（上传后）
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            const char* errstr = "UNKNOWN";
+            switch (err) {
+                case GL_INVALID_ENUM: errstr = "GL_INVALID_ENUM"; break;
+                case GL_INVALID_VALUE: errstr = "GL_INVALID_VALUE"; break;
+                case GL_INVALID_OPERATION: errstr = "GL_INVALID_OPERATION"; break;
+                case GL_OUT_OF_MEMORY: errstr = "GL_OUT_OF_MEMORY"; break;
+                default: break;
+            }
+            fprintf(stderr, "GL error after glTexSubImage2D: 0x%X (%s)\n", err, errstr);
+        }
+    } else {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, leftTexID);
+    }
     glUniform1i(texLeftLocation, 0);
 
-    // 绑定右眼纹理到纹理单元1
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, rightTexID);
+    // 绑定并可能上传右眼纹理
+    if (rightPtr && imgW > 0 && imgH > 0) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, rightTexID);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, rightPtr);
+
+        // 检查并打印任何 GL 错误（上传后）
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            const char* errstr = "UNKNOWN";
+            switch (err) {
+                case GL_INVALID_ENUM: errstr = "GL_INVALID_ENUM"; break;
+                case GL_INVALID_VALUE: errstr = "GL_INVALID_VALUE"; break;
+                case GL_INVALID_OPERATION: errstr = "GL_INVALID_OPERATION"; break;
+                case GL_OUT_OF_MEMORY: errstr = "GL_OUT_OF_MEMORY"; break;
+                default: break;
+            }
+            fprintf(stderr, "GL error after glTexSubImage2D (right): 0x%X (%s)\n", err, errstr);
+        }
+    } else {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, rightTexID);
+    }
     glUniform1i(texRightLocation, 1);
 
     // 绘制全屏四边形（6个顶点）
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    // 检查并打印任何 GL 错误（绘制后）
+    {
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            const char* errstr = "UNKNOWN";
+            switch (err) {
+                case GL_INVALID_ENUM: errstr = "GL_INVALID_ENUM"; break;
+                case GL_INVALID_VALUE: errstr = "GL_INVALID_VALUE"; break;
+                case GL_INVALID_OPERATION: errstr = "GL_INVALID_OPERATION"; break;
+                case GL_OUT_OF_MEMORY: errstr = "GL_OUT_OF_MEMORY"; break;
+                default: break;
+            }
+            fprintf(stderr, "GL error after glDrawElements: 0x%X (%s)\n", err, errstr);
+        }
+    }
 
     //glFlush();
     glFinish();
@@ -342,10 +437,70 @@ void GLDisplay::renderWindowContext(int windowIndex) {
         return;
     }
 
+    // ===== 测试1：帧间隔测量 =====
+    // 只在第一个窗口中测量帧间隔，避免多线程干扰
+    static auto last_frame_time = std::chrono::steady_clock::now();
+    if (windowIndex == 0) {
+        auto current_time = std::chrono::steady_clock::now();
+        auto frame_interval = std::chrono::duration_cast<std::chrono::microseconds>(
+            current_time - last_frame_time).count();
+        last_frame_time = current_time;
+#if DO_EFFECIENCY_TEST
+        printf("FRAME_INTERVAL: %ld us (%.2f ms)\n", frame_interval, frame_interval / 1000.0);
+#endif
+    }
+
     // 获取当前窗口的上下文
     glfwMakeContextCurrent(windows[windowIndex]);
 
-    // 清除颜色缓冲区
+    // 运行时诊断：打印当前上下文/平台/驱动信息，帮助定位 VSync/swap-interval 行为问题
+    // 这些日志仅在 DO_EFFECIENCY_TEST 打开时输出（避免默认干扰）
+#if DO_EFFECIENCY_TEST
+    {
+        // 当前 GLFW 上下文指针
+        void* current_ctx = reinterpret_cast<void*>(glfwGetCurrentContext());
+        void* win_ptr = reinterpret_cast<void*>(windows[windowIndex]);
+        EFF_PRINT("CONTEXT_DIAG: windowIndex=%d current_ctx=%p window_ptr=%p\n",
+                  windowIndex, current_ctx, win_ptr);
+
+        // 环境与会话类型（Wayland vs X11）
+        const char* xdg_session = getenv("XDG_SESSION_TYPE");
+        const char* wayland = getenv("WAYLAND_DISPLAY");
+        const char* display_env = getenv("DISPLAY");
+        const char* vblank_mode = getenv("vblank_mode");
+        const char* gl_sync = getenv("__GL_SYNC_TO_VBLANK");
+        EFF_PRINT("ENV: XDG_SESSION_TYPE=%s WAYLAND_DISPLAY=%s DISPLAY=%s vblank_mode=%s __GL_SYNC_TO_VBLANK=%s\n",
+                  xdg_session ? xdg_session : "(null)",
+                  wayland ? wayland : "(null)",
+                  display_env ? display_env : "(null)",
+                  vblank_mode ? vblank_mode : "(null)",
+                  gl_sync ? gl_sync : "(null)");
+
+        // OpenGL 驱动/渲染器信息（在有当前上下文时有效）
+        const unsigned char* vendor = glGetString(GL_VENDOR);
+        const unsigned char* renderer = glGetString(GL_RENDERER);
+        const unsigned char* version = glGetString(GL_VERSION);
+        const unsigned char* glsl = glGetString(GL_SHADING_LANGUAGE_VERSION);
+        EFF_PRINT("GL_INFO: VENDOR=\"%s\" RENDERER=\"%s\" VERSION=\"%s\" GLSL=\"%s\"\n",
+                  vendor ? vendor : (const unsigned char*)"(null)",
+                  renderer ? renderer : (const unsigned char*)"(null)",
+                  version ? version : (const unsigned char*)"(null)",
+                  glsl ? glsl : (const unsigned char*)"(null)");
+
+        // 检查常见 swap-control 扩展（可帮助判断是否支持 runtime swap interval 控制）
+        EFF_PRINT("EXT_CHECK: WGL_EXT_swap_control=%d GLX_EXT_swap_control=%d GLX_MESA_swap_control=%d GLX_SGI_swap_control=%d\n",
+                  glfwExtensionSupported("WGL_EXT_swap_control"),
+                  glfwExtensionSupported("GLX_EXT_swap_control"),
+                  glfwExtensionSupported("GLX_MESA_swap_control"),
+                  glfwExtensionSupported("GLX_SGI_swap_control"));
+    }
+#endif
+
+    // 立即确保在当前线程/上下文上启用 VSync
+    glfwSwapInterval(1);
+
+    // 清除颜色缓冲区（默认黑色背景）
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // 使用着色器程序
@@ -353,14 +508,73 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     // 绑定当前窗口的VAO
     glBindVertexArray(VAOs[windowIndex]);
 
-    // 绑定左眼纹理到纹理单元0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, leftTexID);
+    // 在持久上下文中上传最新的纹理数据（如果有）— 先从共享状态读取指针
+    const unsigned char* leftPtr = nullptr;
+    const unsigned char* rightPtr = nullptr;
+    int imgW = 0, imgH = 0;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        leftPtr = currentLeftData;
+        rightPtr = currentRightData;
+        imgW = currentImgWidth;
+        imgH = currentImgHeight;
+    }
+
+    static auto last_upload_log = std::chrono::steady_clock::now() - std::chrono::seconds(2);
+    if (leftPtr && imgW > 0 && imgH > 0) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, leftTexID);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, leftPtr);
+
+        // 每秒打印一次上传心跳，帮助确认上传确实发生
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_upload_log >= std::chrono::seconds(1)) {
+            last_upload_log = now;
+            printf("Uploading texture frame...\n");
+        }
+
+        // 检查并打印任何 GL 错误（上传后）
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            const char* errstr = "UNKNOWN";
+            switch (err) {
+                case GL_INVALID_ENUM: errstr = "GL_INVALID_ENUM"; break;
+                case GL_INVALID_VALUE: errstr = "GL_INVALID_VALUE"; break;
+                case GL_INVALID_OPERATION: errstr = "GL_INVALID_OPERATION"; break;
+                case GL_OUT_OF_MEMORY: errstr = "GL_OUT_OF_MEMORY"; break;
+                default: break;
+            }
+            fprintf(stderr, "GL error after glTexSubImage2D: 0x%X (%s)\n", err, errstr);
+        }
+    } else {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, leftTexID);
+    }
     glUniform1i(texLeftLocation, 0);
 
-    // 绑定右眼纹理到纹理单元1
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, rightTexID);
+    // 绑定并可能上传右眼纹理
+    if (rightPtr && imgW > 0 && imgH > 0) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, rightTexID);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, rightPtr);
+
+        // 检查并打印任何 GL 错误（上传后）
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            const char* errstr = "UNKNOWN";
+            switch (err) {
+                case GL_INVALID_ENUM: errstr = "GL_INVALID_ENUM"; break;
+                case GL_INVALID_VALUE: errstr = "GL_INVALID_VALUE"; break;
+                case GL_INVALID_OPERATION: errstr = "GL_INVALID_OPERATION"; break;
+                case GL_OUT_OF_MEMORY: errstr = "GL_OUT_OF_MEMORY"; break;
+                default: break;
+            }
+            fprintf(stderr, "GL error after glTexSubImage2D (right): 0x%X (%s)\n", err, errstr);
+        }
+    } else {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, rightTexID);
+    }
     glUniform1i(texRightLocation, 1);
 
     // 绘制全屏四边形（6个顶点）
@@ -369,10 +583,30 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     // 确保命令执行完成（关键：用于延迟测试）
     glFinish();
 
-    // 交换前后缓冲区
+    // 在工作线程的当前上下文上执行 SwapBuffers（在工作线程执行 swap 可提高驱动对 swap-interval 的一致性）
+    // 确保在当前上下文上启用 VSync（部分驱动要求在 swap 的同一线程/上下文上设置）
+    glfwSwapInterval(1);
+
+    // 记录 swap 时间戳
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        window_swap_timestamps[windowIndex] = std::chrono::steady_clock::now();
+    }
+
+    // 执行交换（在工作线程）
     glfwSwapBuffers(windows[windowIndex]);
 
-    // 释放上下文，允许其他线程使用
+    // 在当前上下文插入 fence，用于后续延迟检测
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (window_frame_fences[windowIndex] != nullptr) {
+            glDeleteSync(window_frame_fences[windowIndex]);
+            window_frame_fences[windowIndex] = nullptr;
+        }
+        window_frame_fences[windowIndex] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    }
+
+    // 释放当前上下文
     glfwMakeContextCurrent(NULL);
 }
 
@@ -390,6 +624,13 @@ void GLDisplay::initWorkers() {
 
 void GLDisplay::workerLoop(int windowIndex) {
     uint64_t local_gen_id = 0;
+    // 绑定并长期持有该线程的窗口上下文，避免每帧重复绑定/解绑导致驱动打断 VSync 锁
+    if (windowIndex < 0 || windowIndex >= static_cast<int>(windows.size())) {
+        return;
+    }
+    glfwMakeContextCurrent(windows[windowIndex]);
+    // 在此线程绑定的上下文上启用 VSync（swap interval）
+    glfwSwapInterval(1);
 
     while (true) {
         std::unique_lock<std::mutex> lock(mtx);
@@ -421,6 +662,8 @@ void GLDisplay::workerLoop(int windowIndex) {
             cv_done.notify_one();
         }
     }
+    // 退出循环前释放绑定的上下文
+    glfwMakeContextCurrent(NULL);
 }
 
 void GLDisplay::drawParallel() {
@@ -450,8 +693,54 @@ void GLDisplay::drawParallel() {
         });
     }
 
-    // 主线程处理所有窗口的事件
+    // 主线程只负责处理窗口事件（SwapBuffers 已由工作线程在各自上下文中执行）
     glfwPollEvents();
+}
+
+void GLDisplay::checkFrameLatency() {
+    // 检查每个窗口最近一帧的延迟（使用每窗口 fence）
+    for (size_t i = 0; i < windows.size(); ++i) {
+        GLsync fence = nullptr;
+        std::chrono::steady_clock::time_point swap_time;
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            fence = window_frame_fences[i];
+            swap_time = window_swap_timestamps[i];
+        }
+
+        if (fence == nullptr) continue;
+
+        GLenum fence_status = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+        if (fence_status == GL_ALREADY_SIGNALED || fence_status == GL_CONDITION_SATISFIED) {
+            auto completion_time = std::chrono::steady_clock::now();
+            auto latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                completion_time - swap_time).count();
+
+            #if DO_EFFECIENCY_TEST
+            printf("FRAME_LATENCY: Window %zu - SwapBuffers to GPU completion: %ld us (%.2f ms)\n",
+                   i, latency_us, latency_us / 1000.0);
+            #endif
+
+            // 清理完成的 fence
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                glDeleteSync(window_frame_fences[i]);
+                window_frame_fences[i] = nullptr;
+            }
+        } else if (fence_status == GL_TIMEOUT_EXPIRED) {
+            // 还未完成，跳过
+            continue;
+        } else if (fence_status == GL_WAIT_FAILED) {
+            #if DO_EFFECIENCY_TEST
+            printf("FRAME_LATENCY: Error checking fence for window %zu\n", i);
+            #endif
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                glDeleteSync(window_frame_fences[i]);
+                window_frame_fences[i] = nullptr;
+            }
+        }
+    }
 }
 
 bool GLDisplay::shouldClose() {
@@ -480,6 +769,14 @@ void GLDisplay::cleanup() {
         }
     }
     workers.clear();
+
+    // 清理所有GLsync fence对象
+    for (int i = 0; i < MAX_TRACKED_FRAMES; i++) {
+        if (frame_fences[i] != nullptr) {
+            glDeleteSync(frame_fences[i]);
+            frame_fences[i] = nullptr;
+        }
+    }
 
     // 清理所有VAO（需要在各自的上下文中删除）
     for (size_t i = 0; i < windows.size() && i < VAOs.size(); i++) {

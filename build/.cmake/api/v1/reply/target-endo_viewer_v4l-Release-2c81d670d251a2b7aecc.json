@@ -73,11 +73,7 @@
 			[
 				{
 					"backtrace" : 4,
-					"define" : "TEST_OPENGL_NO_VSYNC=1"
-				},
-				{
-					"backtrace" : 4,
-					"define" : "USE_VULKAN=0"
+					"define" : "USE_VULKAN=1"
 				}
 			],
 			"includes" : 
@@ -122,11 +118,7 @@
 			[
 				{
 					"backtrace" : 4,
-					"define" : "TEST_OPENGL_NO_VSYNC=1"
-				},
-				{
-					"backtrace" : 4,
-					"define" : "USE_VULKAN=0"
+					"define" : "USE_VULKAN=1"
 				}
 			],
 			"includes" : 

@@ -15,6 +15,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <chrono>
 
 class GLDisplay {
 public:
@@ -64,6 +65,11 @@ public:
     void drawParallel();
 
     /**
+     * @brief 检查帧延迟（验证驱动队列深度）
+     */
+    void checkFrameLatency();
+
+    /**
      * @brief 检查窗口是否应该关闭
      * @return true如果窗口应该关闭
      */
@@ -94,6 +100,21 @@ private:
     std::atomic<int> threads_completed{0};      // 已完成线程计数
     bool stop_threads = false;                  // 线程停止标志
     uint64_t frame_gen_id = 0;                  // 帧代计数器（确保每帧只处理一次）
+
+    // 帧时间戳追踪（用于验证驱动队列深度）
+    static constexpr int MAX_TRACKED_FRAMES = 10;  // 跟踪最近10帧
+    std::chrono::steady_clock::time_point swap_timestamps[MAX_TRACKED_FRAMES];  // SwapBuffers时间戳
+    GLsync frame_fences[MAX_TRACKED_FRAMES];       // GPU fence对象
+    int current_frame_index = 0;                   // 当前帧索引
+    // 每窗口的渲染就绪与 fence，用于延迟检测
+    std::vector<GLsync> window_frame_fences;   // 每个窗口最近一帧的 fence
+    std::vector<std::chrono::steady_clock::time_point> window_swap_timestamps; // 每个窗口的 swap 时间戳
+
+    // 当前帧的纹理数据指针（由 updateVideo 在主线程写入，worker 在持久上下文中读取并上传）
+    const unsigned char* currentLeftData = nullptr;
+    const unsigned char* currentRightData = nullptr;
+    int currentImgWidth = 0;
+    int currentImgHeight = 0;
 
     /**
      * @brief 初始化GLFW窗口

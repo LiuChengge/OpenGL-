@@ -6,6 +6,8 @@
 
 #IncludeRegexTransform: 
 
+../include/efficiency_test.h
+
 ../include/glad/glad.h
 KHR/khrplatform.h
 -
@@ -21,6 +23,8 @@ ctime
 /home/lcg/code/endo_v4l_cv/src/inc/GLDisplay.h
 ./inc/VkDisplay.h
 /home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h
+efficiency_test.h
+/home/lcg/code/endo_v4l_cv/src/efficiency_test.h
 
 /home/lcg/code/endo_v4l_cv/src/endo_viewer.h
 thread
@@ -48,6 +52,8 @@ mutex
 condition_variable
 -
 atomic
+-
+chrono
 -
 
 /home/lcg/code/endo_v4l_cv/src/inc/VkDisplay.h

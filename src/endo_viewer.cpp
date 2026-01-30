@@ -4,7 +4,7 @@
 #include "./inc/GLDisplay.h"
 #include "./inc/VkDisplay.h"
 
-#define DO_EFFECIENCY_TEST 1  // 设置为1启用详细性能分析
+#include "efficiency_test.h"
 
 // 渲染模式切换：0 = 串行渲染（单线程），1 = 并行渲染（多线程）
 #define RENDER_MODE_PARALLEL 1
@@ -117,6 +117,9 @@ void EndoViewer::readLeftImage(int index) {
         _write_index_l.store(1 - write_idx, std::memory_order_release);
         _new_frame_l.store(true, std::memory_order_release);
 
+        // 更新帧 ID（用于最新帧策略追踪）
+        _frame_id_l.fetch_add(1, std::memory_order_release);
+
         auto ms = getDurationSince(time_start);
 #if DO_EFFECIENCY_TEST
         printf("CAMERA_ACQUIRE: [%ld]ms\n", ms);
@@ -161,6 +164,9 @@ void EndoViewer::readRightImage(int index) {
         _write_index_r.store(1 - write_idx, std::memory_order_release);
         _new_frame_r.store(true, std::memory_order_release);
 
+        // 更新帧 ID（用于最新帧策略追踪）
+        _frame_id_r.fetch_add(1, std::memory_order_release);
+
         auto ms = getDurationSince(time_start);
 // #if DO_EFFECIENCY_TEST
 //         printf("EndoViewer::readRightImage: [%ld]ms elapsed.\n", ms);
@@ -199,9 +205,9 @@ void EndoViewer::show() {
 
 #if !USE_VULKAN
     // ========== OPENGL BACKEND ==========
-    // Initialize OpenGL display with 2 windows for latency testing
+    // Initialize OpenGL display with 1 window for single-window latency testing
     GLDisplay* glDisplay = new GLDisplay();
-    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 2)) {
+    if (!glDisplay->init(1920, 540, "Endoscope Viewer - OpenGL Mode", 1)) {
         printf("Failed to initialize GLDisplay\n");
         delete glDisplay;
         return;
@@ -223,21 +229,68 @@ void EndoViewer::show() {
 #endif
 
 #if USE_VULKAN
-    // ========== VULKAN MAIN LOOP ==========
-    // 3. 主循环
-    while (!vkDisplay->shouldClose()) {
-        auto frame_start = ::getCurrentTimePoint();
+    // ========== VULKAN MAIN LOOP - Just-in-Time 提交 + 最新帧策略 ==========
+    printf("Starting Vulkan low-latency main loop with Just-in-Time submission...\n");
 
-        // 处理窗口事件 (必须在主线程调用)
+    uint64_t lastFrameId_l = 0;  // 上次渲染的帧 ID
+    uint64_t lastFrameId_r = 0;
+    uint64_t droppedFrames = 0;  // 丢帧统计
+    uint64_t totalFrames = 0;    // 总渲染帧数
+
+    while (!vkDisplay->shouldClose()) {
+        // 3.1 处理窗口事件 (必须在主线程调用)
         vkDisplay->pollEvents();
 
-        auto poll_end = ::getCurrentTimePoint();
+        // 3.2 读取当前帧 ID（无锁读取，使用 relaxed 语义）
+        uint64_t currentFrameId_l = _frame_id_l.load(std::memory_order_relaxed);
+        uint64_t currentFrameId_r = _frame_id_r.load(std::memory_order_relaxed);
 
-        // 读取索引 = 1 - 写入索引（读取已完成写入的缓冲区）
-        // 使用 memory_order_acquire 确保看到完整的帧数据
+        // 3.3 如果没有新帧，短暂休眠后继续检查
+        if (currentFrameId_l == lastFrameId_l || currentFrameId_r == lastFrameId_r) {
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+            continue;
+        }
+
+        // 3.4 Just-in-Time 等待：延迟到 VSync 前合适的时机才提交
+        // 目标：在 VSync 前 SUBMIT_AHEAD_MS 提交，给驱动留出缓冲时间
+        double timeToVsync = vkDisplay->getTimeToNextVSync();
+        constexpr double MIN_WAIT_MS = 2.0;  // 最小等待阈值
+
+        // 主动丢帧策略：如果离 VSync 还很远，持续检查新帧
+        while (timeToVsync > vkDisplay->SUBMIT_AHEAD_MS + MIN_WAIT_MS) {
+            // 休眠 1ms 后重新检查
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+            // 检查是否有更新的帧到达
+            uint64_t newFrameId_l = _frame_id_l.load(std::memory_order_relaxed);
+            uint64_t newFrameId_r = _frame_id_r.load(std::memory_order_relaxed);
+
+            if (newFrameId_l != currentFrameId_l || newFrameId_r != currentFrameId_r) {
+                // 发现新帧，更新当前帧 ID（丢旧帧）
+                if (newFrameId_l > currentFrameId_l) {
+                    droppedFrames += (newFrameId_l - currentFrameId_l);
+                    currentFrameId_l = newFrameId_l;
+                }
+                if (newFrameId_r > currentFrameId_r) {
+                    droppedFrames += (newFrameId_r - currentFrameId_r);
+                    currentFrameId_r = newFrameId_r;
+                }
+#if DO_EFFECIENCY_TEST
+                printf("DROPPED_FRAMES: skipped %ld old frame(s), using newest\n", droppedFrames);
+#endif
+            }
+
+            // 重新计算剩余时间
+            timeToVsync = vkDisplay->getTimeToNextVSync();
+        }
+
+        // 3.5 读取最新缓冲区索引
+        // // 根据当前帧 ID 确定要读取的缓冲区
+        // int read_idx_l = (currentFrameId_l % 2);
+        // int read_idx_r = (currentFrameId_r % 2);
+        // 应该使用与采集线程一致的逻辑
         int read_idx_l = 1 - _write_index_l.load(std::memory_order_acquire);
         int read_idx_r = 1 - _write_index_r.load(std::memory_order_acquire);
-
         // 检查缓冲区是否有效
         if (_image_l_buffers[read_idx_l].empty() ||
             _image_r_buffers[read_idx_r].empty()) {
@@ -245,35 +298,39 @@ void EndoViewer::show() {
             continue;
         }
 
-        auto buffer_check_end = ::getCurrentTimePoint();
-
-        // 4. 数据上传 (CPU -> Staging Buffer)
+        // 3.6 数据上传 (CPU -> Staging Buffer)
         // Vulkan 的 updateVideo 只是内存拷贝 (memcpy)，非常快
+        auto frame_start = ::getCurrentTimePoint();
         vkDisplay->updateVideo(
             _image_l_buffers[read_idx_l].data,
             _image_r_buffers[read_idx_r].data,
             imwidth, imheight
         );
 
-        auto upload_end = ::getCurrentTimePoint();
-
-        // 5. 渲染提交 (Submit & Present)
+        // 3.7 渲染提交 (Submit & Present)
         // 这一步是非阻塞的，除非 GPU 积压了超过 MAX_FRAMES_IN_FLIGHT 帧
         vkDisplay->draw();
 
         auto draw_end = ::getCurrentTimePoint();
 
+        // 3.8 更新帧 ID 记录
+        lastFrameId_l = currentFrameId_l;
+        lastFrameId_r = currentFrameId_r;
+        totalFrames++;
+
 #if DO_EFFECIENCY_TEST
-        printf("FRAME_PROFILE: poll=%ld us, buffer_check=%ld us, upload=%ld us, draw=%ld us, total=%ld us\n",
-               getDurationBetween(frame_start, poll_end),
-               getDurationBetween(poll_end, buffer_check_end),
-               getDurationBetween(buffer_check_end, upload_end),
-               getDurationBetween(upload_end, draw_end),
-               getDurationBetween(frame_start, draw_end));
+        // 每 60 帧打印一次统计
+        if (totalFrames % 60 == 0) {
+            printf("FRAME_STATS: total=%ld, dropped=%ld (%.1f%%), draw_time=%ld us\n",
+                   totalFrames, droppedFrames,
+                   totalFrames > 0 ? (100.0 * droppedFrames / totalFrames) : 0.0,
+                   getDurationBetween(frame_start, draw_end));
+        }
 #endif
     }
 
-    printf("EndoViewer: exit Vulkan mode.\n");
+    printf("EndoViewer: exit Vulkan mode. Total frames: %ld, dropped: %ld\n",
+           totalFrames, droppedFrames);
 
     _keep_running = false;
     // 稍微等待一下，让子线程安全退出（可选，防止析构过快）
@@ -304,12 +361,18 @@ void EndoViewer::show() {
         auto t3 = ::getCurrentTimePoint();
         glDisplay->drawParallel();
         auto t4 = ::getCurrentTimePoint();
-        printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+    // 每帧耗时打印（仅在 DO_EFFECIENCY_TEST == 1 时启用）
+#if DO_EFFECIENCY_TEST
+    printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+#endif
 #else
         auto t3 = ::getCurrentTimePoint();
         glDisplay->drawSerial();
         auto t4 = ::getCurrentTimePoint();
-        printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+    // 每帧耗时打印（仅在 DO_EFFECIENCY_TEST == 1 时启用）
+#if DO_EFFECIENCY_TEST
+    printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
+#endif
 #endif
     }
 
