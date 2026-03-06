@@ -195,12 +195,14 @@ private:
 
         in vec2 TexCoord;    // 从顶点着色器接收的纹理坐标
 
+
         uniform sampler2D texLeft;   // 左眼纹理采样器
         uniform sampler2D texRight;  // 右眼纹理采样器
 
         void main()
         {
             vec2 uv = TexCoord;
+            uv.y = 1.0 - uv.y;
 
             if (uv.x < 0.5) {
                 // 屏幕左半部分：采样左眼纹理

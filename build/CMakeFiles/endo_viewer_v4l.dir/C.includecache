@@ -6,3 +6,23 @@
 
 #IncludeRegexTransform: 
 
+../include/glad/glad.h
+KHR/khrplatform.h
+-
+
+/home/lcg/code/endo_v4l_cv/src/glad.c
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+glad/glad.h
+-
+windows.h
+-
+winapifamily.h
+-
+dlfcn.h
+-
+
