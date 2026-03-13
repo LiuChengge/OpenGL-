@@ -41,9 +41,15 @@ public:
     unsigned int setupTexture(int width, int height);
 
     /**
+     * @brief 设置是否使用 worker 线程（必须在 initWorkers 调用前设置）
+     * @param useWorkers true=使用多线程 worker, false=单线程直接渲染
+     */
+    void setUseWorkers(bool useWorkers) { useWorkers_ = useWorkers; }
+
+    /**
      * @brief 更新双目视频纹理数据
-     * @param leftData 左眼图像数据（BGR格式）
-     * @param rightData 右眼图像数据（BGR格式）
+     * @param leftData 左眼图像数据（RGBA格式，4字节对齐）
+     * @param rightData 右眼图像数据（RGBA格式，4字节对齐）
      * @param width 图像宽度
      * @param height 图像高度
      */
@@ -109,12 +115,17 @@ private:
     // 每窗口的渲染就绪与 fence，用于延迟检测
     std::vector<GLsync> window_frame_fences;   // 每个窗口最近一帧的 fence
     std::vector<std::chrono::steady_clock::time_point> window_swap_timestamps; // 每个窗口的 swap 时间戳
+    // 每窗口 in-flight 限制用 fence：用于替代 glFinish，防止 CPU 提前提交过多帧导致队列堆积
+    std::vector<GLsync> window_inflight_fences;
 
     // 当前帧的纹理数据指针（由 updateVideo 在主线程写入，worker 在持久上下文中读取并上传）
     const unsigned char* currentLeftData = nullptr;
     const unsigned char* currentRightData = nullptr;
     int currentImgWidth = 0;
     int currentImgHeight = 0;
+
+    // 单线程模式标志：true 表示不使用 worker 线程，直接在主线程渲染
+    bool useWorkers_ = true;
 
     /**
      * @brief 初始化GLFW窗口

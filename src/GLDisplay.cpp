@@ -5,6 +5,21 @@
 #include "efficiency_test.h"
 #include <cstdlib>
 
+namespace {
+// 等待一个 fence 变为 signaled；用于将 in-flight 帧数限制为 1，替代每帧 glFinish() 的“暴力同步”
+inline void waitAndDeleteFence(GLsync& fence) {
+    if (fence == nullptr) return;
+    // 这里用阻塞等待：保证上一帧 GPU 命令完成后才开始下一帧，避免驱动呈现队列堆积 -> 读旧帧/延迟上升
+    while (true) {
+        GLenum s = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
+        if (s == GL_ALREADY_SIGNALED || s == GL_CONDITION_SATISFIED) break;
+        if (s == GL_WAIT_FAILED) break;
+    }
+    glDeleteSync(fence);
+    fence = nullptr;
+}
+} // namespace
+
 GLDisplay::GLDisplay() : shaderProgram(0), VBO(0), EBO(0), windowWidth(0), windowHeight(0),
     texLeftLocation(-1), texRightLocation(-1) {
     // 初始化帧追踪数组
@@ -49,8 +64,10 @@ bool GLDisplay::init(int width, int height, std::string title, int numWindows) {
     // 初始化每窗口的 fence / swap 状态（initGLFW 已经创建 windows 列表）
     window_frame_fences.resize(windows.size());
     window_swap_timestamps.resize(windows.size());
+    window_inflight_fences.resize(windows.size());
     for (size_t i = 0; i < windows.size(); ++i) {
         window_frame_fences[i] = nullptr;
+        window_inflight_fences[i] = nullptr;
     }
 
     // 设置背景清除颜色为黑色（在第一个窗口上下文中）
@@ -239,9 +256,11 @@ unsigned int GLDisplay::setupTexture(int width, int height) {
     glBindTexture(GL_TEXTURE_2D, leftTexID);
     // 分配纹理内存并初始化为白色，以便验证渲染管线（避免黑屏由空纹理引起）
     {
-        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+        // Action Item #4：使用 RGBA8，4字节对齐，避免 GL_RGB(3字节) 触发驱动重打包
+        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
         std::vector<unsigned char> white(sz, 255);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, white.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, white.data());
     }
     // 设置纹理参数
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -253,9 +272,10 @@ unsigned int GLDisplay::setupTexture(int width, int height) {
     glGenTextures(1, &rightTexID);
     glBindTexture(GL_TEXTURE_2D, rightTexID);
     {
-        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+        size_t sz = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
         std::vector<unsigned char> white(sz, 255);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, white.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, white.data());
     }
     // 设置纹理参数
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -268,8 +288,13 @@ unsigned int GLDisplay::setupTexture(int width, int height) {
         glfwMakeContextCurrent(NULL);
     }
 
-    // 所有 GL 资源已创建，安全地启动 worker 线程（worker 将长期持有各自上下文）
-    initWorkers();
+    // 根据 useWorkers_ 决定是否启动 worker 线程
+    // 单线程模式下不启动 worker，渲染直接在主线程完成（对齐 Vulkan 语义）
+    if (useWorkers_) {
+        initWorkers();
+    } else {
+        printf("Single-thread mode: skipping worker thread initialization\n");
+    }
 
     return leftTexID; // 返回左纹理ID以保持兼容性
 }
@@ -288,6 +313,9 @@ void GLDisplay::draw() {
     if (windows.empty() || VAOs.empty()) return;
     
     glfwMakeContextCurrent(windows[0]);
+
+    // Action Item #3：限制 in-flight=1（替代 glFinish），避免 CPU 提交过快导致呈现队列堆积
+    waitAndDeleteFence(window_inflight_fences[0]);
     
     // 清除颜色缓冲区
     glClear(GL_COLOR_BUFFER_BIT);
@@ -314,7 +342,8 @@ void GLDisplay::draw() {
     if (leftPtr && imgW > 0 && imgH > 0) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, leftTexID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, leftPtr);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGBA, GL_UNSIGNED_BYTE, leftPtr);
 
         // 每秒打印一次上传心跳，帮助确认上传确实发生
         auto now = std::chrono::steady_clock::now();
@@ -346,7 +375,8 @@ void GLDisplay::draw() {
     if (rightPtr && imgW > 0 && imgH > 0) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, rightTexID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, rightPtr);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGBA, GL_UNSIGNED_BYTE, rightPtr);
 
         // 检查并打印任何 GL 错误（上传后）
         GLenum err = glGetError();
@@ -385,8 +415,10 @@ void GLDisplay::draw() {
         }
     }
 
-    //glFlush();
-    glFinish();
+    // Action Item #3：不再使用 glFinish() 的“暴力同步”
+    // 在本帧命令尾部插入 fence，下一帧开始前等待 -> 最大 in-flight=1
+    window_inflight_fences[0] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glFlush(); // 确保 fence 被提交到 GPU
 
     // 交换前后缓冲区并处理事件
     glfwSwapBuffers(windows[0]);
@@ -397,6 +429,9 @@ void GLDisplay::drawSerial() {
     // 串行渲染：遍历所有窗口并顺序渲染
     for (size_t i = 0; i < windows.size() && i < VAOs.size(); i++) {
         glfwMakeContextCurrent(windows[i]);
+
+        // Action Item #3：限制 in-flight=1（替代 glFinish）
+        waitAndDeleteFence(window_inflight_fences[i]);
         
         // 清除颜色缓冲区
         glClear(GL_COLOR_BUFFER_BIT);
@@ -419,8 +454,9 @@ void GLDisplay::drawSerial() {
         // 绘制全屏四边形（6个顶点）
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // 确保命令执行完成
-        glFinish();
+        // 插入 fence，下一帧开始前等待
+        window_inflight_fences[i] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        glFlush();
 
         // 交换前后缓冲区
         glfwSwapBuffers(windows[i]);
@@ -452,6 +488,9 @@ void GLDisplay::renderWindowContext(int windowIndex) {
 
     // 获取当前窗口的上下文
     glfwMakeContextCurrent(windows[windowIndex]);
+
+    // Action Item #3：限制 in-flight=1（替代 glFinish），避免 VSync swap 队列堆积导致端到端延迟上升
+    waitAndDeleteFence(window_inflight_fences[windowIndex]);
 
     // 运行时诊断：打印当前上下文/平台/驱动信息，帮助定位 VSync/swap-interval 行为问题
     // 这些日志仅在 DO_EFFECIENCY_TEST 打开时输出（避免默认干扰）
@@ -496,8 +535,9 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     }
 #endif
 
+    // 注意：glfwSwapInterval(1) 在 initGLFW() 和 workerLoop() 初始化阶段已设置，这里不再每帧重复调用
     // 立即确保在当前线程/上下文上启用 VSync
-    glfwSwapInterval(1);
+    // glfwSwapInterval(1);  // 移除：初始化阶段已经设置，每帧重复调用增加开销
 
     // 清除颜色缓冲区（默认黑色背景）
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -524,7 +564,8 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     if (leftPtr && imgW > 0 && imgH > 0) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, leftTexID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, leftPtr);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGBA, GL_UNSIGNED_BYTE, leftPtr);
 
         // 每秒打印一次上传心跳，帮助确认上传确实发生
         auto now = std::chrono::steady_clock::now();
@@ -556,7 +597,8 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     if (rightPtr && imgW > 0 && imgH > 0) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, rightTexID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGB, GL_UNSIGNED_BYTE, rightPtr);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imgW, imgH, GL_RGBA, GL_UNSIGNED_BYTE, rightPtr);
 
         // 检查并打印任何 GL 错误（上传后）
         GLenum err = glGetError();
@@ -580,12 +622,13 @@ void GLDisplay::renderWindowContext(int windowIndex) {
     // 绘制全屏四边形（6个顶点）
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    // 确保命令执行完成（关键：用于延迟测试）
-    glFinish();
+    // Action Item #3：不再 glFinish；插入 fence，下一帧开始前等待（最大 in-flight=1）
+    window_inflight_fences[windowIndex] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glFlush();
 
     // 在工作线程的当前上下文上执行 SwapBuffers（在工作线程执行 swap 可提高驱动对 swap-interval 的一致性）
-    // 确保在当前上下文上启用 VSync（部分驱动要求在 swap 的同一线程/上下文上设置）
-    glfwSwapInterval(1);
+    // 注意：glfwSwapInterval(1) 已在初始化阶段设置，此处不再重复调用
+    // glfwSwapInterval(1);  // 移除：避免每帧重复设置
 
     // 记录 swap 时间戳
     {
@@ -606,8 +649,8 @@ void GLDisplay::renderWindowContext(int windowIndex) {
         window_frame_fences[windowIndex] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     }
 
-    // 释放当前上下文
-    glfwMakeContextCurrent(NULL);
+    // 注意：不再调用 glfwMakeContextCurrent(NULL)，保持上下文长期绑定以避免每帧重复绑定/解绑
+    // 上下文将由 workerLoop 在线程结束时释放
 }
 
 void GLDisplay::initWorkers() {
@@ -754,27 +797,36 @@ bool GLDisplay::shouldClose() {
 }
 
 void GLDisplay::cleanup() {
-    // 停止所有工作线程
-    {
-        std::unique_lock<std::mutex> lock(mtx);
-        stop_threads = true;
-        frame_gen_id++;  // 递增代计数器，确保等待中的线程检查停止条件
-    }
-    cv_start.notify_all();
-
-    // 等待所有工作线程结束
-    for (auto& worker : workers) {
-        if (worker.joinable()) {
-            worker.join();
+    // 停止所有工作线程（只在使用了 worker 的情况下）
+    if (!workers.empty()) {
+        {
+            std::unique_lock<std::mutex> lock(mtx);
+            stop_threads = true;
+            frame_gen_id++;  // 递增代计数器，确保等待中的线程检查停止条件
         }
+        cv_start.notify_all();
+
+        // 等待所有工作线程结束
+        for (auto& worker : workers) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+        workers.clear();
     }
-    workers.clear();
 
     // 清理所有GLsync fence对象
     for (int i = 0; i < MAX_TRACKED_FRAMES; i++) {
         if (frame_fences[i] != nullptr) {
             glDeleteSync(frame_fences[i]);
             frame_fences[i] = nullptr;
+        }
+    }
+    // 清理每窗口的 in-flight fence（限制队列深度用）
+    for (auto& f : window_inflight_fences) {
+        if (f != nullptr) {
+            glDeleteSync(f);
+            f = nullptr;
         }
     }
 

@@ -62,7 +62,7 @@ build edit_cache: phony CMakeFiles/edit_cache.util
 build cmake_object_order_depends_target_endo_viewer_v4l: phony || shaders
 
 build CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: CXX_COMPILER__endo_viewer_v4l ../main.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/main.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -70,7 +70,7 @@ build CMakeFiles/endo_viewer_v4l.dir/main.cpp.o: CXX_COMPILER__endo_viewer_v4l .
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir
 
 build CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o: CXX_COMPILER__endo_viewer_v4l ../src/GLDisplay.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -78,7 +78,7 @@ build CMakeFiles/endo_viewer_v4l.dir/src/GLDisplay.cpp.o: CXX_COMPILER__endo_vie
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir/src
 
 build CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: CXX_COMPILER__endo_viewer_v4l ../src/VkDisplay.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -86,7 +86,7 @@ build CMakeFiles/endo_viewer_v4l.dir/src/VkDisplay.cpp.o: CXX_COMPILER__endo_vie
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir/src
 
 build CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: CXX_COMPILER__endo_viewer_v4l ../src/endo_viewer.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -94,7 +94,7 @@ build CMakeFiles/endo_viewer_v4l.dir/src/endo_viewer.cpp.o: CXX_COMPILER__endo_v
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir/src
 
 build CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o: CXX_COMPILER__endo_viewer_v4l ../src/inc/mjpeg2jpeg.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -102,7 +102,7 @@ build CMakeFiles/endo_viewer_v4l.dir/src/inc/mjpeg2jpeg.cpp.o: CXX_COMPILER__end
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir/src/inc
 
 build CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o: CXX_COMPILER__endo_viewer_v4l ../src/inc/v4l2_capture.cpp || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o.d
   FLAGS = -g   -std=gnu++17
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4
@@ -110,7 +110,7 @@ build CMakeFiles/endo_viewer_v4l.dir/src/inc/v4l2_capture.cpp.o: CXX_COMPILER__e
   OBJECT_FILE_DIR = CMakeFiles/endo_viewer_v4l.dir/src/inc
 
 build CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o: C_COMPILER__endo_viewer_v4l ../src/glad.c || cmake_object_order_depends_target_endo_viewer_v4l
-  DEFINES = -DUSE_VULKAN=1
+  DEFINES = -DUSE_VULKAN=0
   DEP_FILE = CMakeFiles/endo_viewer_v4l.dir/src/glad.c.o.d
   FLAGS = -g
   INCLUDES = -I../src -I../include -I/opt/libjpeg-turbo/include -isystem /usr/include/opencv4

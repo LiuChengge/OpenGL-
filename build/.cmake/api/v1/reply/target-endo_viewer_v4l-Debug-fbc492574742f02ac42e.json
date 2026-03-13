@@ -73,7 +73,7 @@
 			[
 				{
 					"backtrace" : 4,
-					"define" : "USE_VULKAN=1"
+					"define" : "USE_VULKAN=0"
 				}
 			],
 			"includes" : 
@@ -118,7 +118,7 @@
 			[
 				{
 					"backtrace" : 4,
-					"define" : "USE_VULKAN=1"
+					"define" : "USE_VULKAN=0"
 				}
 			],
 			"includes" : 

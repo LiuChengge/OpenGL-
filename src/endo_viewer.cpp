@@ -6,8 +6,16 @@
 
 #include "efficiency_test.h"
 
-// 渲染模式切换：0 = 串行渲染（单线程），1 = 并行渲染（多线程）
+// 渲染模式选择：
+// 0 = 单线程直连渲染（主线程直接渲染，无 worker，对齐 Vulkan 语义，最 low-latency）
+// 1 = 并行渲染（多线程 worker）
+// 2 = 串行渲染（多窗口顺序渲染）
+#define RENDER_MODE_SINGLE_THREAD 0
 #define RENDER_MODE_PARALLEL 1
+#define RENDER_MODE_SERIAL 2
+
+// 当前使用的渲染模式
+#define RENDER_MODE RENDER_MODE_SINGLE_THREAD
 
 // 后端选择：0 = OpenGL模式, 1 = Vulkan模式 (通过CMake定义)
 
@@ -213,6 +221,13 @@ void EndoViewer::show() {
         return;
     }
 
+    // 根据渲染模式设置是否使用 worker 线程
+#if RENDER_MODE == RENDER_MODE_SINGLE_THREAD
+    glDisplay->setUseWorkers(false);  // 单线程模式：不启动 worker
+#else
+    glDisplay->setUseWorkers(true);  // 多线程模式：启动 worker
+#endif
+
     if (!glDisplay->setupTexture(imwidth, imheight)) {
         printf("Failed to setup GLDisplay texture\n");
         delete glDisplay;
@@ -221,9 +236,11 @@ void EndoViewer::show() {
 
     // 打印当前使用的渲染模式（VSync开启）
     printf("Real camera latency test: consuming V4L2 camera feeds...\n");
-#if RENDER_MODE_PARALLEL
+#if RENDER_MODE == RENDER_MODE_SINGLE_THREAD
+    printf("*** RENDERING MODE: SINGLE-THREAD DIRECT (Low-Latency, Vulkan-aligned) + VSync ***\n");
+#elif RENDER_MODE == RENDER_MODE_PARALLEL
     printf("*** RENDERING MODE: PARALLEL + VSync (Interval 1) ***\n");
-#else
+#elif RENDER_MODE == RENDER_MODE_SERIAL
     printf("*** RENDERING MODE: SERIAL + VSync (Interval 1) ***\n");
 #endif
 #endif
@@ -344,36 +361,79 @@ void EndoViewer::show() {
     // ========== OPENGL MAIN LOOP ==========
     // Main display loop - no frame rate limiting for latency testing
     while (!glDisplay->shouldClose()) {
-        // Check if camera data is ready
-        if (_image_l_buffers[0].empty() || _image_r_buffers[0].empty()) {
+        // ========== Action Item #1/#2 ==========
+        // (1) 通过 write_index 推导“最新可读帧”的 read_idx，避免固定读 [0] 导致读旧帧
+        // (2) 新帧门控：没有新相机帧时绝不触发 updateVideo/draw/SwapBuffers，避免 VSync 队列堆积
+        //
+        // 说明：仅靠 _new_frame 的 store(false) 会有“渲染中有新帧到达被误清”的竞态。
+        // 这里用 frame_id 快照做保护：只在 frame_id 未变化时才清 _new_frame。
+        if (!_new_frame_l.load(std::memory_order_acquire) ||
+            !_new_frame_r.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // 轻量挂起，降低无意义 swap
+            continue;
+        }
+
+        const uint64_t snapFrameId_l = _frame_id_l.load(std::memory_order_acquire);
+        const uint64_t snapFrameId_r = _frame_id_r.load(std::memory_order_acquire);
+
+        const int read_idx_l = 1 - _write_index_l.load(std::memory_order_acquire);
+        const int read_idx_r = 1 - _write_index_r.load(std::memory_order_acquire);
+
+        // Check if camera data is ready (读最新缓冲)
+        if (_image_l_buffers[read_idx_l].empty() || _image_r_buffers[read_idx_r].empty()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
+        }
+
+        // ========== Action Item #4 ==========
+        // 将 RGB(3 bytes) 转为 RGBA(4 bytes)，保证 4 字节对齐，避免驱动层做隐式重打包产生 CPU 开销/队列延迟
+        static cv::Mat rgba_l;
+        static cv::Mat rgba_r;
+        if (rgba_l.empty() || rgba_l.cols != imwidth || rgba_l.rows != imheight) {
+            rgba_l = cv::Mat(imheight, imwidth, CV_8UC4);
+            rgba_r = cv::Mat(imheight, imwidth, CV_8UC4);
+        }
+        {
+            cv::Mat rgbL(imheight, imwidth, CV_8UC3, _image_l_buffers[read_idx_l].data);
+            cv::Mat rgbR(imheight, imwidth, CV_8UC3, _image_r_buffers[read_idx_r].data);
+            cv::cvtColor(rgbL, rgba_l, cv::COLOR_RGB2RGBA);
+            cv::cvtColor(rgbR, rgba_r, cv::COLOR_RGB2RGBA);
         }
 
         // 测量OpenGL各阶段耗时
         auto t1 = ::getCurrentTimePoint();
         // Direct OpenGL rendering without data copying for minimum latency
-        glDisplay->updateVideo(_image_l_buffers[0].data, _image_r_buffers[0].data, imwidth, imheight);
+        glDisplay->updateVideo(rgba_l.data, rgba_r.data, imwidth, imheight);
         auto t2 = ::getCurrentTimePoint();
 
         // 根据宏选择渲染模式
-#if RENDER_MODE_PARALLEL
+#if RENDER_MODE == RENDER_MODE_SINGLE_THREAD
+        // 单线程直连渲染模式：主线程直接调用 draw()，无 worker 线程开销
+        // 这是对齐 Vulkan 语义的低延迟路径
+        auto t3 = ::getCurrentTimePoint();
+        glDisplay->draw();
+        auto t4 = ::getCurrentTimePoint();
+#elif RENDER_MODE == RENDER_MODE_PARALLEL
         auto t3 = ::getCurrentTimePoint();
         glDisplay->drawParallel();
         auto t4 = ::getCurrentTimePoint();
-    // 每帧耗时打印（仅在 DO_EFFECIENCY_TEST == 1 时启用）
-#if DO_EFFECIENCY_TEST
-    printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
-#endif
-#else
+#elif RENDER_MODE == RENDER_MODE_SERIAL
         auto t3 = ::getCurrentTimePoint();
         glDisplay->drawSerial();
         auto t4 = ::getCurrentTimePoint();
+#endif
     // 每帧耗时打印（仅在 DO_EFFECIENCY_TEST == 1 时启用）
 #if DO_EFFECIENCY_TEST
     printf("OpenGL: upload=%ldus, draw=%ldus\n", getDurationBetween(t1, t2), getDurationBetween(t3, t4));
 #endif
-#endif
+
+        // 消费完成后再清新帧标记：只在 frame_id 未变化时清，避免“渲染期间新帧到来被误清”
+        if (_frame_id_l.load(std::memory_order_acquire) == snapFrameId_l) {
+            _new_frame_l.store(false, std::memory_order_release);
+        }
+        if (_frame_id_r.load(std::memory_order_acquire) == snapFrameId_r) {
+            _new_frame_r.store(false, std::memory_order_release);
+        }
     }
 
     printf("EndoViewer: exit OpenGL latency test mode.\n");
